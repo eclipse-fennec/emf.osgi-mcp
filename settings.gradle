@@ -1,0 +1,34 @@
+pluginManagement {
+  plugins {
+    id 'biz.aQute.bnd.workspace' version bnd_version
+  }
+  repositories {
+    maven {
+      url = uri(bnd_snapshots)
+      content {
+        snapshotsOnly()
+        includeGroup('biz.aQute.bnd')
+        includeGroup('biz.aQute.bnd.workspace')
+      }
+    }
+    mavenCentral()
+    gradlePluginPortal()
+  }
+}
+plugins {
+  id 'biz.aQute.bnd.workspace'
+}
+rootProject.name = "emf.osgi-mcp"
+
+// Exclude non-standard projects from Gradle build
+def excludedProjects = [
+  'docs'
+] as Set
+
+gradle.beforeProject { project ->
+  if (project.name in excludedProjects) {
+    project.tasks.configureEach { task ->
+      task.enabled = false
+    }
+  }
+}

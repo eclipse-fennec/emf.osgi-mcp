@@ -1,0 +1,12 @@
+Bundle-Name: Eclipse Fennec Gogo MCP Server
+Bundle-Description: MCP server to introspect a running OSGi environment using the built in Gogo commands
+-workingset: gogo
+
+-buildpath: \
+	io.modelcontextprotocol.sdk.mcp-core;version=latest,\
+	io.projectreactor.reactor-core;version=latest,\
+	reactive-streams;version=latest,\
+	com.fasterxml.jackson.core.jackson-annotations;version=latest,\
+	org.apache.felix.gogo.runtime;version=latest,\
+	org.eclipse.fennec.mcp.api;version=snapshot
+	

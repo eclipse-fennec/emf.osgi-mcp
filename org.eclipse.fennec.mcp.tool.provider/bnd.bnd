@@ -1,0 +1,11 @@
+Bundle-Name: Eclipse Fennec OSGi MCP Tool Provider
+Bundle-Description: Component that collects MCP Tools for the MCP Whiteboard
+
+-buildpath: \
+	org.osgi.namespace.implementation;version=latest,\
+	org.osgi.util.promise;version=latest,\
+	io.modelcontextprotocol.sdk.mcp-core;version=latest,\
+	io.projectreactor.reactor-core;version=latest,\
+	reactive-streams;version=latest,\
+	com.fasterxml.jackson.core.jackson-annotations;version=latest,\
+	org.eclipse.fennec.mcp.api;version=snapshot

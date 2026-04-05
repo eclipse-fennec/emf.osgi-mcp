@@ -1,0 +1,9 @@
+Bundle-Name: Eclipse Fennec Gogo MCP Server Runtime
+-workingset: gogo
+
+-buildpath: \
+	org.osgi.framework;version=latest,\
+	org.osgi.namespace.implementation;version=latest,\
+	slf4j.api;version=latest,\
+	org.eclipse.fennec.mcp.api;version=snapshot
+

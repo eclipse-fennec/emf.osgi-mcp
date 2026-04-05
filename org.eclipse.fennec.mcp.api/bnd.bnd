@@ -1,0 +1,21 @@
+Bundle-Name: Eclipse Fennec OSGi MCP Whiteboard API
+Bundle-Description: Whiteboard API for MCP Tools using io.contextprotocol
+
+-library: enableEMF
+
+-buildpath: \
+	org.osgi.framework;version=latest,\
+	org.osgi.namespace.implementation;version=latest,\
+	org.osgi.util.promise;version=latest,\
+	org.osgi.service.http.whiteboard;version=latest,\
+	tools.jackson.core.jackson-databind;version=latest,\
+	tools.jackson.core.jackson-core;version=latest,\
+	com.fasterxml.jackson.core.jackson-annotations;version=latest,\
+	org.apache.felix.http.servlet-api;version='2.1.0',\
+	org.eclipse.fennec.codec.api;version=latest,\
+	org.eclipse.fennec.codec;version=latest,\
+	org.eclipse.fennec.codec.jsonschema;version=latest,\
+	org.eclipse.fennec.model.metadata;version=latest,\
+	io.projectreactor.reactor-core;version=latest,\
+	io.modelcontextprotocol.sdk.mcp-core;version=latest,\
+	io.modelcontextprotocol.sdk.mcp-json-jackson3;version=latest
