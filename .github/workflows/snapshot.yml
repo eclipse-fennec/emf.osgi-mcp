@@ -53,7 +53,7 @@ jobs:
         rm private.key
       shell: bash 
     - name: Build with Gradle
-      run: ./gradlew release --debug
+      run: ./gradlew release --info
     - name: Delete GPG key from keyring
       if: always()
       run: |
