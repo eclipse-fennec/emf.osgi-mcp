@@ -52,6 +52,7 @@ gogo.tools  tool.provider  http.component
 |--------|---------|
 | `org.eclipse.fennec.mcp.api` | Core interfaces: `MCPServer`, `MCPTool`, `MCPToolProvider`, `MCPResourceProvider`, `MCPPromptProvider`. Abstract bases: `AbstractMCPTool` (schema loading), `AbstractHttpMCPServer` (servlet lifecycle). |
 | `org.eclipse.fennec.mcp.gogo.tools` | Concrete tool implementations: `ExecuteGogoTool` (runs Gogo commands), `ListCommandsTool` (discovers available commands). |
+| `org.eclipse.fennec.mcp.emf.tools` | EMF model tools: 11 MCP tools to build/validate/serialize EMF instances in session-scoped datasets with replayable recipes. Deny-all allow-lists on `EMFModelGuard` PID, caps on `EMFDatasetRegistry` PID. |
 | `org.eclipse.fennec.mcp.tool.provider` | Whiteboard aggregator: collects `MCPTool` services, converts to MCP `AsyncToolSpecification` objects. 1-minute timeout per tool execution. |
 | `org.eclipse.fennec.mcp.http.component` | HTTP transport: DS component extending `AbstractHttpMCPServer`, registered via OSGi HTTP Whiteboard as a servlet. |
 | `org.eclipse.fennec.mcp.gogo.runtime` | Activator component that triggers the MCP server lifecycle for Gogo integration. Has `launch.bndrun` for local runs. |

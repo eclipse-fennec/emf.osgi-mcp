@@ -238,6 +238,7 @@ Use any OSGi Configuration Admin mechanism (FileInstall, REST, Gogo commands, et
 | `has.prompt.capability` | boolean | no | `false` | Advertise prompt capability to clients |
 | `has.resource.capability` | boolean | no | `false` | Advertise resource capability to clients |
 | `server.instructions` | String | no | — | Instructions shown to MCP clients |
+| `auth.token` | String (password) | no | `""` (empty) | Bearer token required in the `Authorization: Bearer <token>` header. When empty, only loopback callers are permitted and any remote request is rejected. Set a strong token before exposing the endpoint beyond localhost. |
 | `toolProviders.target` | String | no | — | LDAP filter selecting `MCPToolProvider` services |
 | `toolProviders.cardinality.minimum` | int | no | `1` | Minimum number of tool providers before the server activates |
 
@@ -310,7 +311,7 @@ This enables type-safe round-tripping: the MCP client receives JSON matching the
 
 ## EMF Model Tools (`org.eclipse.fennec.mcp.emf.tools`)
 
-The `org.eclipse.fennec.mcp.emf.tools` bundle provides 11 MCP tools that let an agent create, populate, validate and serialize EMF model instances for **allow-listed** EPackages/EClasses. See `docs/emf-model-tools-plan.md` for the full design (datasets, recipes, security model).
+The `org.eclipse.fennec.mcp.emf.tools` bundle provides 11 MCP tools that let an agent create, populate, validate and serialize EMF model instances for **allow-listed** EPackages/EClasses (datasets, replayable recipes, deny-all security model).
 
 ### Security: deny-all allow-lists
 
