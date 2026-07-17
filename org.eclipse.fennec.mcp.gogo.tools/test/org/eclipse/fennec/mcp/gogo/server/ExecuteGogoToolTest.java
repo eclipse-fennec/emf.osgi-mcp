@@ -18,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -25,6 +26,9 @@ import java.io.PrintStream;
 import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.felix.service.command.CommandProcessor;
 import org.apache.felix.service.command.CommandSession;
@@ -32,6 +36,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.modelcontextprotocol.spec.McpSchema;
+import reactor.core.Disposable;
 
 /**
  * Verifies argument validation, output relaying, session cleanup and the OOM
@@ -100,6 +105,70 @@ class ExecuteGogoToolTest {
 		assertThat(result.isError()).isNotEqualTo(Boolean.TRUE);
 		assertThat(textOf(result)).contains("**Command:** `lb`").contains("System Bundle");
 		verify(session).close();
+	}
+
+	@Test
+	void cancellation_interruptsWorkerAndClosesSession() throws Exception {
+		CountDownLatch started = new CountDownLatch(1);
+		AtomicBoolean interrupted = new AtomicBoolean(false);
+		when(processor.createSession(any(), any(), any())).thenReturn(session);
+		when(session.execute(anyString())).thenAnswer(inv -> {
+			started.countDown();
+			try {
+				Thread.sleep(30_000); // block as a runaway command would
+			} catch (InterruptedException e) {
+				interrupted.set(true);
+				Thread.currentThread().interrupt();
+			}
+			return null;
+		});
+
+		Disposable subscription = tool.execute(null, Map.of("command", "runaway")).subscribe();
+		assertThat(started.await(2, TimeUnit.SECONDS)).as("worker started").isTrue();
+
+		// Simulate the provider's request timeout cancelling the call.
+		subscription.dispose();
+
+		// The blocking command must be interrupted and its session torn down.
+		verify(session, timeout(2000).atLeastOnce()).close();
+		long deadline = System.currentTimeMillis() + 2000;
+		while (!interrupted.get() && System.currentTimeMillis() < deadline) {
+			Thread.sleep(10);
+		}
+		assertThat(interrupted.get()).as("worker thread interrupted").isTrue();
+	}
+
+	@Test
+	void tooManyConcurrentCommands_areRejectedNotUnbounded() throws Exception {
+		// Saturate the bounded pool with blocking commands, then assert the next
+		// call is rejected instead of spawning yet another worker thread.
+		CountDownLatch release = new CountDownLatch(1);
+		CountDownLatch running = new CountDownLatch(GogoCommandRunner.MAX_CONCURRENT_COMMANDS);
+		when(processor.createSession(any(), any(), any())).thenReturn(session);
+		when(session.execute(anyString())).thenAnswer(inv -> {
+			running.countDown();
+			release.await();
+			return null;
+		});
+
+		Disposable[] inflight = new Disposable[GogoCommandRunner.MAX_CONCURRENT_COMMANDS];
+		try {
+			for (int i = 0; i < inflight.length; i++) {
+				inflight[i] = tool.execute(null, Map.of("command", "block")).subscribe();
+			}
+			assertThat(running.await(3, TimeUnit.SECONDS)).as("pool saturated").isTrue();
+
+			McpSchema.CallToolResult result = tool.execute(null, Map.of("command", "lb")).block();
+			assertThat(result.isError()).isEqualTo(Boolean.TRUE);
+			assertThat(textOf(result)).contains("Too many concurrent");
+		} finally {
+			release.countDown();
+			for (Disposable d : inflight) {
+				if (d != null) {
+					d.dispose();
+				}
+			}
+		}
 	}
 
 	@Test
