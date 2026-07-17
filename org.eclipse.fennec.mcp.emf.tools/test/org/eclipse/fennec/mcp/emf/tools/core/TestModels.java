@@ -1,0 +1,142 @@
+/*
+ * ******************************************************************
+ * Copyright (c) 2026 Contributors to the Eclipse Foundation.
+ *
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ *
+ * Contributors:
+ *   Data In Motion Consulting - initial implementation
+ * ******************************************************************
+ */
+package org.eclipse.fennec.mcp.emf.tools.core;
+
+import org.eclipse.emf.ecore.EAttribute;
+import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EEnum;
+import org.eclipse.emf.ecore.EEnumLiteral;
+import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EReference;
+import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
+
+/**
+ * Dynamic test metamodel (no codegen): a small library model with attributes,
+ * enums, many-valued features, containment and cross-references.
+ *
+ * <pre>
+ * Library:  name (required), books (containment many Book),
+ *           writers (containment many Writer), featuredBook (ref Book)
+ * Book:     title, pages (int), genre (enum), tags (many string), author (ref Writer)
+ * Writer:   name
+ * Abstract: AbstractItem (abstract, to test deny on abstract classes)
+ * </pre>
+ *
+ * @author Mark Hoffmann
+ * @since Jun 12, 2026
+ */
+public final class TestModels {
+
+	public static final String NS_URI = "http://example.org/library";
+	public static final String LIBRARY = NS_URI + "#//Library";
+	public static final String BOOK = NS_URI + "#//Book";
+	public static final String WRITER = NS_URI + "#//Writer";
+	public static final String ABSTRACT_ITEM = NS_URI + "#//AbstractItem";
+
+	private TestModels() {
+	}
+
+	public static EPackage libraryPackage() {
+		EcoreFactory factory = EcoreFactory.eINSTANCE;
+		EcorePackage ecore = EcorePackage.eINSTANCE;
+
+		EPackage ePackage = factory.createEPackage();
+		ePackage.setName("library");
+		ePackage.setNsPrefix("lib");
+		ePackage.setNsURI(NS_URI);
+
+		EEnum genre = factory.createEEnum();
+		genre.setName("Genre");
+		EEnumLiteral fantasy = factory.createEEnumLiteral();
+		fantasy.setName("FANTASY");
+		fantasy.setLiteral("FANTASY");
+		fantasy.setValue(0);
+		EEnumLiteral scifi = factory.createEEnumLiteral();
+		scifi.setName("SCIFI");
+		scifi.setLiteral("SCIFI");
+		scifi.setValue(1);
+		genre.getELiterals().add(fantasy);
+		genre.getELiterals().add(scifi);
+		ePackage.getEClassifiers().add(genre);
+
+		EClass abstractItem = factory.createEClass();
+		abstractItem.setName("AbstractItem");
+		abstractItem.setAbstract(true);
+		ePackage.getEClassifiers().add(abstractItem);
+
+		EClass writer = factory.createEClass();
+		writer.setName("Writer");
+		writer.getEStructuralFeatures().add(attribute(factory, "name", ecore.getEString(), 0));
+		ePackage.getEClassifiers().add(writer);
+
+		EClass book = factory.createEClass();
+		book.setName("Book");
+		book.getEStructuralFeatures().add(attribute(factory, "title", ecore.getEString(), 0));
+		book.getEStructuralFeatures().add(attribute(factory, "pages", ecore.getEInt(), 0));
+		EAttribute genreAttribute = attribute(factory, "genre", null, 0);
+		genreAttribute.setEType(genre);
+		book.getEStructuralFeatures().add(genreAttribute);
+		EAttribute tags = attribute(factory, "tags", ecore.getEString(), 0);
+		tags.setUpperBound(-1);
+		book.getEStructuralFeatures().add(tags);
+		EReference author = factory.createEReference();
+		author.setName("author");
+		author.setEType(writer);
+		book.getEStructuralFeatures().add(author);
+		ePackage.getEClassifiers().add(book);
+
+		EClass library = factory.createEClass();
+		library.setName("Library");
+		library.getEStructuralFeatures().add(attribute(factory, "name", ecore.getEString(), 1));
+		EReference books = factory.createEReference();
+		books.setName("books");
+		books.setEType(book);
+		books.setContainment(true);
+		books.setUpperBound(-1);
+		library.getEStructuralFeatures().add(books);
+		EReference writers = factory.createEReference();
+		writers.setName("writers");
+		writers.setEType(writer);
+		writers.setContainment(true);
+		writers.setUpperBound(-1);
+		library.getEStructuralFeatures().add(writers);
+		EReference featuredBook = factory.createEReference();
+		featuredBook.setName("featuredBook");
+		featuredBook.setEType(book);
+		library.getEStructuralFeatures().add(featuredBook);
+		ePackage.getEClassifiers().add(library);
+
+		return ePackage;
+	}
+
+	public static EPackage.Registry registryWith(EPackage ePackage) {
+		EPackage.Registry registry = new EPackageRegistryImpl();
+		registry.put(ePackage.getNsURI(), ePackage);
+		return registry;
+	}
+
+	private static EAttribute attribute(EcoreFactory factory, String name, EClassifier type, int lowerBound) {
+		EAttribute attribute = factory.createEAttribute();
+		attribute.setName(name);
+		if (type != null) {
+			attribute.setEType(type);
+		}
+		attribute.setLowerBound(lowerBound);
+		return attribute;
+	}
+}

@@ -4,12 +4,25 @@ Lightweight MCP (Model Context Protocol) server framework for OSGi environments.
 
 Includes a ready-to-use **Gogo Shell MCP Server** that exposes Apache Felix Gogo commands as MCP tools over HTTP.
 
+> 🛑 **Development use only.** The Gogo Shell MCP Server is a **development- and
+> debugging-time tool**. The `execute_gogo` tool runs arbitrary Gogo shell
+> commands in the live OSGi runtime — effectively remote code execution for
+> anyone who can reach the endpoint. **Do not deploy it in production systems.**
+>
+> ⚠️ **Security.** Even for local use it is protected on two levels: the shipped
+> default config binds the listener to `127.0.0.1` (localhost only), and an
+> `McpAuthenticationFilter` rejects every non-loopback request unless an
+> `auth.token` is configured (then a matching `Authorization: Bearer <token>`
+> header is required). **Never expose the endpoint beyond localhost without
+> setting a strong `auth.token`.** See the [development guide](docs/development-guide.md#option-a-osgi-configurator-declarative) for details.
+
 ## Modules
 
 | Bundle | Description |
 |--------|-------------|
 | `org.eclipse.fennec.mcp.api` | Core whiteboard API — `MCPServer`, `MCPTool`, `MCPToolProvider` interfaces and abstract bases |
 | `org.eclipse.fennec.mcp.gogo.tools` | Gogo MCP tools: `ExecuteGogoTool`, `ListCommandsTool` |
+| `org.eclipse.fennec.mcp.emf.tools` | EMF model MCP tools: build, validate and serialize EMF instances for allow-listed EClasses (deny-all by default) |
 | `org.eclipse.fennec.mcp.tool.provider` | Whiteboard aggregator collecting `MCPTool` services into `MCPToolProvider` |
 | `org.eclipse.fennec.mcp.http.component` | HTTP transport via OSGi HTTP Whiteboard servlet |
 | `org.eclipse.fennec.mcp.gogo.runtime` | Activator wiring the Gogo MCP server lifecycle |

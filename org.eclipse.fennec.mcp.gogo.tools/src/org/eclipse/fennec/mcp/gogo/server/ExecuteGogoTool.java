@@ -15,7 +15,6 @@
 package org.eclipse.fennec.mcp.gogo.server;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
@@ -38,6 +37,9 @@ import reactor.core.publisher.Mono;
  */
 @Component(name = "ExecuteGogoTool", service = MCPTool.class, property = "tool.name=execute_gogo")
 public class ExecuteGogoTool extends AbstractMCPTool {
+
+	/** Upper bound on captured stdout/stderr per command, guarding against OOM from unbounded output. */
+	static final int MAX_OUTPUT_BYTES = 1_048_576;
 
 	@Reference
 	private CommandProcessor commandProcessor;
@@ -71,17 +73,16 @@ public class ExecuteGogoTool extends AbstractMCPTool {
 	@Override
 	public Mono<McpSchema.CallToolResult> execute(McpAsyncServerExchange exchange, Map<String, Object> arguments) {
 		return Mono.fromCallable(() -> {
-			String command = (String) arguments.get("command");
-
-			if (command == null || command.isBlank()) {
+			Object rawCommand = arguments == null ? null : arguments.get("command");
+			if (!(rawCommand instanceof String command) || command.isBlank()) {
 				return McpSchema.CallToolResult.builder()
-						.addTextContent("Error: 'command' parameter is required and must not be empty")
+						.addTextContent("Error: 'command' parameter is required and must be a non-empty string")
 						.isError(true)
 						.build();
 			}
 
-			ByteArrayOutputStream out = new ByteArrayOutputStream();
-			ByteArrayOutputStream err = new ByteArrayOutputStream();
+			CappedOutputStream out = new CappedOutputStream(MAX_OUTPUT_BYTES);
+			CappedOutputStream err = new CappedOutputStream(MAX_OUTPUT_BYTES);
 			InputStream in = new ByteArrayInputStream(new byte[0]);
 
 			try (PrintStream outStream = new PrintStream(out, true, StandardCharsets.UTF_8);
@@ -91,8 +92,8 @@ public class ExecuteGogoTool extends AbstractMCPTool {
 				try {
 					Object result = session.execute(command);
 
-					String output = out.toString(StandardCharsets.UTF_8);
-					String error = err.toString(StandardCharsets.UTF_8);
+					String output = out.toUtf8();
+					String error = err.toUtf8();
 
 					StringBuilder sb = new StringBuilder();
 					sb.append("**Command:** `").append(command).append("`\n\n");
@@ -105,6 +106,9 @@ public class ExecuteGogoTool extends AbstractMCPTool {
 					}
 					if (!error.isEmpty()) {
 						sb.append("\n**Stderr:**\n").append(error);
+					}
+					if (out.isTruncated() || err.isTruncated()) {
+						sb.append(String.format("%n_[output truncated at %d bytes]_", MAX_OUTPUT_BYTES));
 					}
 
 					return McpSchema.CallToolResult.builder()

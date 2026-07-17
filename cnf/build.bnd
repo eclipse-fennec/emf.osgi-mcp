@@ -57,4 +57,5 @@ javac.target: 21
 -fixupmessages: \
 	"jpms.jarname calculated module";is:=ignore,\
 	"No translation";is:=ignore,\
-	"The .classpath contains";is:=ignore
+	"The .classpath contains";is:=ignore,\
+	"No metadata for revision";is:=ignore

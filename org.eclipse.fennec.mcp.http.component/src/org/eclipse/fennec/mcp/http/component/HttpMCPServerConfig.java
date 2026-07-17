@@ -15,6 +15,7 @@
 package org.eclipse.fennec.mcp.http.component;
 
 import org.osgi.service.metatype.annotations.AttributeDefinition;
+import org.osgi.service.metatype.annotations.AttributeType;
 import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 
 /**
@@ -93,6 +94,16 @@ public @interface HttpMCPServerConfig {
 			required = false
 			)
 	String server_instructions();
+
+	@AttributeDefinition(
+			name = "Authentication Token",
+			description = "Bearer token required in the 'Authorization: Bearer <token>' header to access the MCP endpoint. "
+					+ "If left empty, only loopback (localhost) callers are permitted and any remote request is rejected. "
+					+ "Set a strong token before exposing the endpoint beyond localhost.",
+			type = AttributeType.PASSWORD,
+			required = false
+			)
+	String auth_token() default "";
 	
 	@AttributeDefinition(
 			name = "MCP Tool Providers Target Filter",

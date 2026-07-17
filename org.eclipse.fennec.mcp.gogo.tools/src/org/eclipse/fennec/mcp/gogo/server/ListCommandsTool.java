@@ -15,7 +15,6 @@
 package org.eclipse.fennec.mcp.gogo.server;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
@@ -38,6 +37,9 @@ import reactor.core.publisher.Mono;
  */
 @Component(name = "ListCommandsTool", service = MCPTool.class, property = "tool.name=list_commands")
 public class ListCommandsTool extends AbstractMCPTool {
+
+	/** Upper bound on captured output, guarding against OOM from unbounded help output. */
+	static final int MAX_OUTPUT_BYTES = 1_048_576;
 
 	@Reference
 	private CommandProcessor commandProcessor;
@@ -69,10 +71,11 @@ public class ListCommandsTool extends AbstractMCPTool {
 	@Override
 	public Mono<McpSchema.CallToolResult> execute(McpAsyncServerExchange exchange, Map<String, Object> arguments) {
 		return Mono.fromCallable(() -> {
-			String scope = arguments != null ? (String) arguments.get("scope") : null;
+			Object rawScope = arguments == null ? null : arguments.get("scope");
+			String scope = rawScope instanceof String s ? s : null;
 
-			ByteArrayOutputStream out = new ByteArrayOutputStream();
-			ByteArrayOutputStream err = new ByteArrayOutputStream();
+			CappedOutputStream out = new CappedOutputStream(MAX_OUTPUT_BYTES);
+			CappedOutputStream err = new CappedOutputStream(MAX_OUTPUT_BYTES);
 			InputStream in = new ByteArrayInputStream(new byte[0]);
 
 			try (PrintStream outStream = new PrintStream(out, true, StandardCharsets.UTF_8);
@@ -82,7 +85,7 @@ public class ListCommandsTool extends AbstractMCPTool {
 				try {
 					session.execute("help");
 
-					String output = out.toString(StandardCharsets.UTF_8);
+					String output = out.toUtf8();
 
 					if (scope != null && !scope.isBlank()) {
 						// Filter lines containing the scope

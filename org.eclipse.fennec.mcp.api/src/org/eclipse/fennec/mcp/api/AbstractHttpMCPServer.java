@@ -16,6 +16,7 @@ package org.eclipse.fennec.mcp.api;
 
 import java.time.Duration;
 import java.util.Dictionary;
+import java.util.Hashtable;
 
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceRegistration;
@@ -27,6 +28,7 @@ import io.modelcontextprotocol.server.McpAsyncServer;
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.transport.HttpServletStreamableServerTransportProvider;
 import io.modelcontextprotocol.spec.McpSchema;
+import jakarta.servlet.Filter;
 import jakarta.servlet.Servlet;
 
 /**
@@ -45,6 +47,7 @@ import jakarta.servlet.Servlet;
 public abstract class AbstractHttpMCPServer implements MCPServer {
 
 	private ServiceRegistration<?> servletRegistration;
+	private ServiceRegistration<?> filterRegistration;
 	protected McpAsyncServer mcpServer;
 	protected BundleContext context;
 
@@ -74,6 +77,13 @@ public abstract class AbstractHttpMCPServer implements MCPServer {
 
 	/** @return the JSON mapper used for MCP protocol serialization */
 	protected abstract McpJsonMapper getJsonMapper();
+
+	/**
+	 * @return the bearer token required to access the MCP endpoint, or {@code null}
+	 *         /blank if no token is configured. When blank, the authentication
+	 *         filter permits loopback callers only. See {@link McpAuthenticationFilter}.
+	 */
+	protected abstract String getAuthToken();
 
 	/**
 	 * Creates the HTTP servlet transport, registers it with the OSGi HTTP Whiteboard,
@@ -109,14 +119,43 @@ public abstract class AbstractHttpMCPServer implements MCPServer {
 	}
 
 	/**
-	 * Registers the MCP transport provider as a Jakarta Servlet via the OSGi HTTP Whiteboard.
+	 * Registers the MCP transport provider as a Jakarta Servlet via the OSGi HTTP Whiteboard,
+	 * together with an {@link McpAuthenticationFilter} guarding the same endpoint.
 	 */
 	protected void registerHttpWhiteboard(HttpServletStreamableServerTransportProvider transportProvider, BundleContext context) {
+		Dictionary<String, Object> servletProperties = getServletProperties();
+		// Register the filter before the servlet so the endpoint is never reachable
+		// without its authentication guard, not even during the startup window.
+		filterRegistration = context.registerService(
+				Filter.class,
+				new McpAuthenticationFilter(this::getAuthToken),
+				getFilterProperties(servletProperties)
+				);
 		servletRegistration = context.registerService(
 				Servlet.class,
 				transportProvider,
-				getServletProperties()
+				servletProperties
 				);
+	}
+
+	/**
+	 * Builds the OSGi HTTP Whiteboard properties for the authentication filter so it
+	 * matches the same endpoint path and HTTP runtime as the transport servlet.
+	 *
+	 * @param servletProperties the servlet registration properties, used to inherit the
+	 *            whiteboard target and endpoint pattern
+	 * @return the filter registration properties
+	 */
+	protected Dictionary<String, Object> getFilterProperties(Dictionary<String, Object> servletProperties) {
+		Dictionary<String, Object> filterProperties = new Hashtable<>();
+		filterProperties.put("osgi.http.whiteboard.filter.pattern", getEndpointPath());
+		filterProperties.put("osgi.http.whiteboard.filter.name", getServerName() + "-auth");
+		filterProperties.put("osgi.http.whiteboard.filter.asyncSupported", true);
+		Object target = servletProperties.get("osgi.http.whiteboard.target");
+		if (target != null) {
+			filterProperties.put("osgi.http.whiteboard.target", target);
+		}
+		return filterProperties;
 	}
 
 	/**
@@ -127,9 +166,15 @@ public abstract class AbstractHttpMCPServer implements MCPServer {
 			mcpServer.close();
 			mcpServer = null;
 		}		
+		// Unregister the servlet first: while it is still reachable, the filter must
+		// stay in place so no request can slip through unauthenticated during shutdown.
 		if(servletRegistration != null) {
 			servletRegistration.unregister();
 			servletRegistration = null;
+		}
+		if(filterRegistration != null) {
+			filterRegistration.unregister();
+			filterRegistration = null;
 		}
 	}
 }

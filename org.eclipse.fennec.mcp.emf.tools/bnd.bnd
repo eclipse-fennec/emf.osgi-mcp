@@ -1,0 +1,16 @@
+Bundle-Name: Eclipse Fennec EMF Model MCP Tools
+Bundle-Description: MCP tools to create, populate, validate and serialize EMF model instances backed by allow-listed EPackages
+-workingset: emf
+
+-library: enableEMF
+
+-buildpath: \
+	io.modelcontextprotocol.sdk.mcp-core;version=latest,\
+	io.projectreactor.reactor-core;version=latest,\
+	reactive-streams;version=latest,\
+	tools.jackson.core.jackson-databind;version=latest,\
+	tools.jackson.core.jackson-core;version=latest,\
+	com.fasterxml.jackson.core.jackson-annotations;version=latest,\
+	org.eclipse.fennec.mcp.api;version=snapshot
+
+-testpath: assertj-core

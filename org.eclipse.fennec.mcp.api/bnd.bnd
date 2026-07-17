@@ -19,3 +19,5 @@ Bundle-Description: Whiteboard API for MCP Tools using io.contextprotocol
 	io.projectreactor.reactor-core;version=latest,\
 	io.modelcontextprotocol.sdk.mcp-core;version=latest,\
 	io.modelcontextprotocol.sdk.mcp-json-jackson3;version=latest
+
+-testpath: assertj-core

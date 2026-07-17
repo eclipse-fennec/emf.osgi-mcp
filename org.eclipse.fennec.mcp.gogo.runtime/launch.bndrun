@@ -5,7 +5,8 @@
 	bnd.identity;id='org.apache.felix.gogo.command',\
 	bnd.identity;id='org.apache.felix.gogo.shell',\
 	bnd.identity;id='slf4j.simple',\
-	bnd.identity;id='org.eclipse.fennec.mcp.gogo.runtime.config'
+	bnd.identity;id='org.eclipse.fennec.mcp.gogo.runtime.config',\
+	bnd.identity;id='org.eclipse.fennec.mcp.emf.tools'
 -runbundles: \
 	io.projectreactor.reactor-core;version='[3.7.0,3.7.1)',\
 	org.apache.aries.spifly.dynamic.framework.extension;version='[1.3.7,1.3.8)',\
@@ -50,4 +51,5 @@
 	org.snakeyaml.engine;version='[3.0.1,3.0.2)',\
 	tools.jackson.dataformat.jackson-dataformat-yaml;version='[3.1.0,3.1.1)',\
 	io.modelcontextprotocol.sdk.mcp-json-jackson3;version='[1.1.1,1.1.2)',\
-	org.eclipse.fennec.mcp.gogo.runtime.config;version=snapshot
+	org.eclipse.fennec.mcp.gogo.runtime.config;version=snapshot,\
+	org.eclipse.fennec.mcp.emf.tools;version=snapshot

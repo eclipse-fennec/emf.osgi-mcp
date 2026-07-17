@@ -15,9 +15,10 @@
 package org.eclipse.fennec.mcp.tool.provider;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.function.BiFunction;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.eclipse.fennec.mcp.api.MCPServerConstants;
 import org.eclipse.fennec.mcp.api.MCPTool;
@@ -61,6 +62,8 @@ configurationPid = "MCPToolProvider", configurationPolicy = ConfigurationPolicy.
 @Designate(ocd = MCPToolProviderConfig.class)
 @Capability(namespace = ImplementationNamespace.IMPLEMENTATION_NAMESPACE, name = MCPServerConstants.MCP_TOOL_PROVIDER_IMPLEMENTATION, version = MCPServerConstants.MCP_TOOL_PROVIDER_VERSION)
 public class MCPToolProviderImpl implements MCPToolProvider{
+
+	private static final Logger LOGGER = Logger.getLogger(MCPToolProviderImpl.class.getName());
 
 	private String description;
 	
@@ -120,18 +123,19 @@ public class MCPToolProviderImpl implements MCPToolProvider{
 			                long duration = System.currentTimeMillis() - startTime;
 			                if(request.meta() != null) {
 			                	 request.meta().forEach((k,v) -> {
-					                	System.err.println(String.format("%s DEBUG: Tool [%s] meta %s = %s", Instant.now().toString(), request.name(), k, v.toString()));
+					                	LOGGER.fine(() -> String.format("Tool [%s] meta %s = %s", request.name(), k, v));
 					                });
 			                }			               
-			                if(!request.arguments().isEmpty()) {
+			                if(request.arguments() != null && !request.arguments().isEmpty()) {
 			                	request.arguments().forEach((k,v) -> {
-			                		System.err.println(String.format("%s DEBUG: Tool [%s] param %s = %s", Instant.now().toString(), request.name(), k, v.toString()));
+			                		LOGGER.fine(() -> String.format("Tool [%s] param %s = %s", request.name(), k, v));
 			                	});
 			                }
-			                System.err.println(String.format("%s DEBUG: Tool [%s] completed in %dms for session id %s", Instant.now().toString(), request.name(), duration, exchange.sessionId()));
+			                LOGGER.fine(String.format("Tool [%s] completed in %dms for session id %s", request.name(), duration, exchange.sessionId()));
 			            })
-			            .doOnError(e -> System.err.println(String.format("%s DEBUG: Tool [%s] FAILED for session id %s: %s", Instant.now().toString(), request.name(), exchange.sessionId(), e.getMessage())))
-			            .onErrorResume(e -> Mono.error(e));
+			            .doOnError(e -> LOGGER.log(Level.FINE,
+			                    String.format("Tool [%s] FAILED for session id %s: %s", request.name(), exchange.sessionId(), e.getMessage()), e))
+			            .onErrorResume(Mono::error);
 			    };
 
 				return McpServerFeatures.AsyncToolSpecification.builder()                                                                                         

@@ -2,6 +2,7 @@
 	":configurator:resource-version": 1,
 	"org.apache.felix.http~gogo": {
 		"org.osgi.service.http.port:int": 8088,
+		"org.apache.felix.http.host": "127.0.0.1",
 		"org.apache.felix.http.name": "gogo"
 	},
 	"MCPToolProvider~gogoShell": {
@@ -19,5 +20,25 @@
 		"toolProviders.target": "(name=gogo_shell_tool_provider)",
 		"toolProviders.cardinality.minimum:int": 1,
 		"server.instructions": "Use this MCP server to interact with a live OSGi runtime. You can execute any Gogo shell command to inspect bundles, DS components, services, configurations, and more. Start with 'list_commands' to see what's available, then use 'execute_gogo' to run specific commands."
+	},
+	"EMFModelGuard": {
+		"epackage.allowlist": [],
+		"eclass.allowlist": []
+	},
+	"MCPToolProvider~emfModel": {
+		"name": "emf_model_tool_provider",
+		"description": "Tools to create, populate, validate and serialize EMF model instances from allow-listed EPackages",
+		"tools.target": "(|(tool.name=list_metamodel)(tool.name=describe_eclass)(tool.name=create_dataset)(tool.name=inspect_dataset)(tool.name=manage_dataset)(tool.name=export_dataset)(tool.name=create_instance)(tool.name=modify_feature)(tool.name=delete_instance)(tool.name=create_from_json)(tool.name=replay_recipe))",
+		"tools.cardinality.minimum:int": 11
+	},
+	"HttpMCPServerComponent~emfModel": {
+		"server.name": "osgi-emf-mcp-server",
+		"server.version": "1.0",
+		"osgi.http.whiteboard.servlet.pattern": "/mcp/emf",
+		"osgi.http.whiteboard.target": "(org.apache.felix.http.name=gogo)",
+		"has.tool.capability": true,
+		"toolProviders.target": "(name=emf_model_tool_provider)",
+		"toolProviders.cardinality.minimum:int": 1,
+		"server.instructions": "Use this MCP server to build EMF model instances from natural-language constraints. Start with list_metamodel and describe_eclass to discover the available metamodel, then create_dataset + create_instance + modify_feature to build objects step by step. Inspect with inspect_dataset (includeRecipe=true returns a replayable build recipe), validate and serialize with export_dataset (XMI or JSON). create_from_json builds a whole instance graph in one call; replay_recipe deterministically reproduces a dataset from a recipe without LLM involvement. Note: only allow-listed EPackages/EClasses are visible and instantiable (deny-all by default)."
 	}
 }

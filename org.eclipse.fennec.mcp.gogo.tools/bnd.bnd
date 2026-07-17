@@ -9,4 +9,6 @@ Bundle-Description: MCP server to introspect a running OSGi environment using th
 	com.fasterxml.jackson.core.jackson-annotations;version=latest,\
 	org.apache.felix.gogo.runtime;version=latest,\
 	org.eclipse.fennec.mcp.api;version=snapshot
-	
+
+-testpath: assertj-core
+

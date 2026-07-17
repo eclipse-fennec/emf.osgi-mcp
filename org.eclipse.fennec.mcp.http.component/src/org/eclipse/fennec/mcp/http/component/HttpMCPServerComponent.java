@@ -229,4 +229,13 @@ public class HttpMCPServerComponent extends AbstractHttpMCPServer{
 	protected McpJsonMapper getJsonMapper() {
 		return jsonMapper.get();
 	}
+
+	/*
+	 * (non-Javadoc)
+	 * @see org.eclipse.fennec.mcp.api.AbstractHttpMCPServer#getAuthToken()
+	 */
+	@Override
+	protected String getAuthToken() {
+		return config.auth_token();
+	}
 }

@@ -157,6 +157,7 @@ Require-Capability: \
 
     "org.apache.felix.http~myserver": {
         "org.osgi.service.http.port:int": 9090,
+        "org.apache.felix.http.host": "127.0.0.1",
         "org.apache.felix.http.name": "myserver"
     },
 
@@ -181,6 +182,33 @@ Require-Capability: \
     }
 }
 ```
+
+> 🛑 **Development use only.** The Gogo Shell MCP Server (`execute_gogo`) is meant
+> for development and debugging against a local runtime. It grants arbitrary
+> command execution in the OSGi framework and **must not be deployed in
+> production systems.** Treat any server that exposes shell-like tools the same
+> way.
+>
+> ⚠️ **Security.** The MCP endpoint has no built-in access control beyond what
+> you configure here. The transport dispatches tool arguments straight to the
+> registered tools (for the Gogo server, into a live `CommandSession`), so an
+> unauthenticated caller who can reach the endpoint can run whatever those tools
+> expose. Two mechanisms protect it:
+>
+> 1. **Bind to loopback.** `org.apache.felix.http.host: 127.0.0.1` (above) keeps
+>    the listener on localhost. This is the default in the shipped Gogo config.
+> 2. **Authentication token.** Set `auth.token` on the
+>    `HttpMCPServerComponent~…` config to require an
+>    `Authorization: Bearer <token>` header. When no token is set, the built-in
+>    `McpAuthenticationFilter` still rejects every non-loopback request, so
+>    exposing the endpoint beyond localhost *requires* configuring a token:
+>
+>    ```json
+>    "HttpMCPServerComponent~myServer": {
+>        "…": "…",
+>        "auth.token": "change-me-to-a-long-random-secret"
+>    }
+>    ```
 
 ### Option B: Configuration Admin (Programmatic)
 
@@ -279,3 +307,47 @@ For tools that produce structured output conforming to an EMF Ecore model:
 3. Implement `StructuredOutputHandler<T>` for post-processing and persistence of tool results on the client side
 
 This enables type-safe round-tripping: the MCP client receives JSON matching the Ecore model, and can deserialize it back via `StructuredOutputStorageHelper.loadEObject()`.
+
+## EMF Model Tools (`org.eclipse.fennec.mcp.emf.tools`)
+
+The `org.eclipse.fennec.mcp.emf.tools` bundle provides 11 MCP tools that let an agent create, populate, validate and serialize EMF model instances for **allow-listed** EPackages/EClasses. See `docs/emf-model-tools-plan.md` for the full design (datasets, recipes, security model).
+
+### Security: deny-all allow-lists
+
+Nothing is visible or instantiable unless explicitly allow-listed on the admin-owned `EMFModelGuard` PID (`configurationPolicy = REQUIRE` — no config, no tools):
+
+```json
+"EMFModelGuard": {
+    "epackage.allowlist": ["http://example.org/library"],
+    "eclass.allowlist": [
+        "http://example.org/library#//Library",
+        "http://example.org/library#//Book"
+    ]
+}
+```
+
+A class is usable only if its package **and** the class itself are listed. Allow-listing a package is a code-trust decision: its generated `EFactory` runs in-process.
+
+### Tool overview
+
+| Tool | Purpose |
+|------|---------|
+| `list_metamodel` | List allow-listed EPackages, or the EClasses of one package |
+| `describe_eclass` | Feature table of an EClass (kind, type, multiplicity, enums) |
+| `create_dataset` | New session-scoped dataset (the unit of state) |
+| `inspect_dataset` | List datasets / objects, validation summary, build recipe |
+| `manage_dataset` | `regenerate` (deterministic recipe replay), `clear`, `delete` |
+| `export_dataset` | Serialize all roots as XMI or JSON (inline up to a byte cap) |
+| `create_instance` | New instance of an allow-listed EClass → `objectId` |
+| `modify_feature` | `set`/`unset`/`add`/`remove` one structural feature |
+| `delete_instance` | Remove an object incl. containment subtree and references |
+| `create_from_json` | Whole instance graph from one JSON payload (via Fennec codec) |
+| `replay_recipe` | Rebuild a dataset deterministically from a recipe, no LLM |
+
+### Reproducibility
+
+Every mutating call is recorded in the dataset's **recipe**. `inspect_dataset` with `includeRecipe=true` returns it; `replay_recipe` / `manage_dataset {regenerate}` reproduce **byte-identical XMI** without LLM involvement. Replay re-validates every operation against the current allow-list.
+
+### Resource limits
+
+The `EMFDatasetRegistry` PID caps datasets per session, objects per dataset, recipe length, value size, JSON payload size and the inline export byte cap (larger exports return a descriptor instead of content).
