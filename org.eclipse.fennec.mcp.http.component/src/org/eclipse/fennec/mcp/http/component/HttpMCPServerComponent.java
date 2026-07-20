@@ -238,4 +238,13 @@ public class HttpMCPServerComponent extends AbstractHttpMCPServer{
 	protected String getAuthToken() {
 		return config.auth_token();
 	}
+
+	/*
+	 * (non-Javadoc)
+	 * @see org.eclipse.fennec.mcp.api.AbstractHttpMCPServer#getKeepAliveIntervalSeconds()
+	 */
+	@Override
+	protected long getKeepAliveIntervalSeconds() {
+		return config.keep_alive_interval_seconds();
+	}
 }

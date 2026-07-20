@@ -238,9 +238,32 @@ Use any OSGi Configuration Admin mechanism (FileInstall, REST, Gogo commands, et
 | `has.prompt.capability` | boolean | no | `false` | Advertise prompt capability to clients |
 | `has.resource.capability` | boolean | no | `false` | Advertise resource capability to clients |
 | `server.instructions` | String | no | — | Instructions shown to MCP clients |
+| `keep.alive.interval.seconds` | long | no | `0` (disabled) | Interval for keep-alive pings to active sessions. Disabled by default. Only enable (a positive value, kept below the reverse-proxy read timeout) when clients maintain a long-lived listening SSE stream; otherwise the SDK floods the log with `Stream unavailable for session …`. See [Deploying Behind a Reverse Proxy](#deploying-behind-a-reverse-proxy-sse). |
 | `auth.token` | String (password) | no | `""` (empty) | Bearer token required in the `Authorization: Bearer <token>` header. When empty, only loopback callers are permitted and any remote request is rejected. Set a strong token before exposing the endpoint beyond localhost. |
 | `toolProviders.target` | String | no | — | LDAP filter selecting `MCPToolProvider` services |
 | `toolProviders.cardinality.minimum` | int | no | `1` | Minimum number of tool providers before the server activates |
+
+### Deploying Behind a Reverse Proxy (SSE)
+
+The HTTP transport is **Streamable HTTP**: responses to the MCP endpoint are served as a
+Server-Sent-Events (SSE) stream. Reverse proxies such as nginx and APISIX buffer upstream
+responses by default, which stalls the stream — events and keep-alive pings are withheld until
+the buffer fills, so the client tears down its listening stream and the server reports the
+session as unavailable.
+
+To prevent this, `HttpMCPServerComponent` **automatically** registers an `SseNoBufferingFilter`
+on the same endpoint as the transport servlet. The filter sets `X-Accel-Buffering: no` and
+`Cache-Control: no-cache` on every response; nginx core (and therefore APISIX) honours
+`X-Accel-Buffering` and turns off buffering for that response. **No configuration is required** —
+it is always on.
+
+**Keep-alive interplay.** Keep-alive pings are **off by default** (`keep.alive.interval.seconds`
+defaults to `0`). The SDK can only ping a session that holds a standalone listening (GET) SSE
+stream; clients using plain request/response POST never open one, so enabling keep-alive for such
+clients only floods the log with `Stream unavailable for session …`. Enable it **only** when your
+clients maintain a long-lived listening stream that needs to be kept warm, and set the interval
+**below** the reverse proxy's read/idle timeout so the connection is refreshed before the proxy
+drops it.
 
 ### LDAP Filter Chaining
 
