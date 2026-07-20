@@ -48,6 +48,7 @@ public abstract class AbstractHttpMCPServer implements MCPServer {
 
 	private ServiceRegistration<?> servletRegistration;
 	private ServiceRegistration<?> filterRegistration;
+	private ServiceRegistration<?> sseFilterRegistration;
 	protected McpAsyncServer mcpServer;
 	protected BundleContext context;
 
@@ -86,16 +87,34 @@ public abstract class AbstractHttpMCPServer implements MCPServer {
 	protected abstract String getAuthToken();
 
 	/**
+	 * @return the interval, in seconds, at which the transport sends keep-alive pings
+	 *         to active sessions. A non-positive value disables keep-alive entirely.
+	 *         See {@link #initializeMCPServer()} for why keep-alive is off by default.
+	 */
+	protected abstract long getKeepAliveIntervalSeconds();
+
+	/**
 	 * Creates the HTTP servlet transport, registers it with the OSGi HTTP Whiteboard,
 	 * and builds the async MCP server with all configured capabilities, tools, prompts,
-	 * and resources. Keep-alive interval is 1 second, request timeout is 10 minutes.
+	 * and resources. Keep-alive is configurable (off by default), request timeout is 10 minutes.
 	 */
 	protected void initializeMCPServer() {
-		HttpServletStreamableServerTransportProvider transportProvider = HttpServletStreamableServerTransportProvider.builder()
+		HttpServletStreamableServerTransportProvider.Builder transportProviderBuilder = HttpServletStreamableServerTransportProvider.builder()
 				.jsonMapper(getJsonMapper())
-				.mcpEndpoint(getEndpointPath())
-				.keepAliveInterval(Duration.ofMillis(1000))
-				.build();
+				.mcpEndpoint(getEndpointPath());
+
+		// Keep-alive pings every session in the transport's session map, but the SDK only
+		// supports pinging a session that holds a standalone listening (GET) SSE stream.
+		// Clients that use plain request/response POST never open that stream, so each ping
+		// fails with "Stream unavailable for session ..." and floods the log. Only enable
+		// keep-alive when an interval is explicitly configured (> 0); a non-positive value
+		// leaves it disabled (the builder treats a null interval as "no keep-alive").
+		long keepAliveIntervalSeconds = getKeepAliveIntervalSeconds();
+		if (keepAliveIntervalSeconds > 0) {
+			transportProviderBuilder.keepAliveInterval(Duration.ofSeconds(keepAliveIntervalSeconds));
+		}
+
+		HttpServletStreamableServerTransportProvider transportProvider = transportProviderBuilder.build();
 
 		registerHttpWhiteboard(transportProvider, context);
 
@@ -120,16 +139,22 @@ public abstract class AbstractHttpMCPServer implements MCPServer {
 
 	/**
 	 * Registers the MCP transport provider as a Jakarta Servlet via the OSGi HTTP Whiteboard,
-	 * together with an {@link McpAuthenticationFilter} guarding the same endpoint.
+	 * together with an {@link McpAuthenticationFilter} guarding the same endpoint and an
+	 * {@link SseNoBufferingFilter} that keeps the SSE stream from being buffered by a reverse proxy.
 	 */
 	protected void registerHttpWhiteboard(HttpServletStreamableServerTransportProvider transportProvider, BundleContext context) {
 		Dictionary<String, Object> servletProperties = getServletProperties();
-		// Register the filter before the servlet so the endpoint is never reachable
+		// Register the filters before the servlet so the endpoint is never reachable
 		// without its authentication guard, not even during the startup window.
 		filterRegistration = context.registerService(
 				Filter.class,
 				new McpAuthenticationFilter(this::getAuthToken),
 				getFilterProperties(servletProperties)
+				);
+		sseFilterRegistration = context.registerService(
+				Filter.class,
+				new SseNoBufferingFilter(),
+				getSseNoBufferingFilterProperties(servletProperties)
 				);
 		servletRegistration = context.registerService(
 				Servlet.class,
@@ -147,9 +172,33 @@ public abstract class AbstractHttpMCPServer implements MCPServer {
 	 * @return the filter registration properties
 	 */
 	protected Dictionary<String, Object> getFilterProperties(Dictionary<String, Object> servletProperties) {
+		return buildFilterProperties(servletProperties, getServerName() + "-auth");
+	}
+
+	/**
+	 * Builds the OSGi HTTP Whiteboard properties for the {@link SseNoBufferingFilter}. The filter is
+	 * bound to the same endpoint and HTTP runtime as the transport servlet and must support async
+	 * dispatch because the streamable transport serves its SSE responses asynchronously.
+	 *
+	 * @param servletProperties the servlet registration properties, used to inherit the
+	 *            whiteboard target and endpoint pattern
+	 * @return the filter registration properties
+	 */
+	protected Dictionary<String, Object> getSseNoBufferingFilterProperties(Dictionary<String, Object> servletProperties) {
+		return buildFilterProperties(servletProperties, getServerName() + "-sse-no-buffering");
+	}
+
+	/**
+	 * Builds HTTP Whiteboard filter properties bound to the transport servlet's endpoint and runtime.
+	 *
+	 * @param servletProperties the servlet registration properties, used to inherit the whiteboard target
+	 * @param filterName the unique whiteboard filter name
+	 * @return the filter registration properties
+	 */
+	private Dictionary<String, Object> buildFilterProperties(Dictionary<String, Object> servletProperties, String filterName) {
 		Dictionary<String, Object> filterProperties = new Hashtable<>();
 		filterProperties.put("osgi.http.whiteboard.filter.pattern", getEndpointPath());
-		filterProperties.put("osgi.http.whiteboard.filter.name", getServerName() + "-auth");
+		filterProperties.put("osgi.http.whiteboard.filter.name", filterName);
 		filterProperties.put("osgi.http.whiteboard.filter.asyncSupported", true);
 		Object target = servletProperties.get("osgi.http.whiteboard.target");
 		if (target != null) {
@@ -166,11 +215,15 @@ public abstract class AbstractHttpMCPServer implements MCPServer {
 			mcpServer.close();
 			mcpServer = null;
 		}		
-		// Unregister the servlet first: while it is still reachable, the filter must
+		// Unregister the servlet first: while it is still reachable, the filters must
 		// stay in place so no request can slip through unauthenticated during shutdown.
 		if(servletRegistration != null) {
 			servletRegistration.unregister();
 			servletRegistration = null;
+		}
+		if(sseFilterRegistration != null) {
+			sseFilterRegistration.unregister();
+			sseFilterRegistration = null;
 		}
 		if(filterRegistration != null) {
 			filterRegistration.unregister();

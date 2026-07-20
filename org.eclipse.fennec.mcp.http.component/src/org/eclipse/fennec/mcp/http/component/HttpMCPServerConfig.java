@@ -96,6 +96,17 @@ public @interface HttpMCPServerConfig {
 	String server_instructions();
 
 	@AttributeDefinition(
+			name = "Keep-Alive Interval (seconds)",
+			description = "Interval at which the server sends keep-alive pings to active sessions. Disabled by default (0 or negative). "
+					+ "The Streamable HTTP transport pings every session, but the SDK can only ping a session that holds a standalone "
+					+ "listening (GET) SSE stream; clients using plain request/response POST never open one, so keep-alive then floods "
+					+ "the log with 'Stream unavailable for session ...'. Only enable this (a positive value, kept below the reverse proxy "
+					+ "read timeout) when your clients maintain a long-lived listening stream that needs to be kept warm.",
+			required = false
+			)
+	long keep_alive_interval_seconds() default 0;
+
+	@AttributeDefinition(
 			name = "Authentication Token",
 			description = "Bearer token required in the 'Authorization: Bearer <token>' header to access the MCP endpoint. "
 					+ "If left empty, only loopback (localhost) callers are permitted and any remote request is rejected. "

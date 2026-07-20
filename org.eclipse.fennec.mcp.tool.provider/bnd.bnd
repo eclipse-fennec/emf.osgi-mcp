@@ -8,4 +8,6 @@ Bundle-Description: Component that collects MCP Tools for the MCP Whiteboard
 	io.projectreactor.reactor-core;version=latest,\
 	reactive-streams;version=latest,\
 	com.fasterxml.jackson.core.jackson-annotations;version=latest,\
-	org.eclipse.fennec.mcp.api;version=snapshot
+	org.eclipse.fennec.mcp.api;version=snapshot,\
+	io.modelcontextprotocol.sdk.mcp-json-jackson3,\
+	tools.jackson.core.jackson-databind

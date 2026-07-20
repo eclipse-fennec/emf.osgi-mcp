@@ -38,8 +38,11 @@ import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.server.McpServerFeatures.AsyncToolSpecification;
 import io.modelcontextprotocol.spec.McpSchema;
 import io.modelcontextprotocol.spec.McpSchema.CallToolRequest;
+import io.modelcontextprotocol.spec.McpSchema.Tool;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * DS component implementing the {@link MCPToolProvider} whiteboard aggregator.
@@ -105,14 +108,12 @@ public class MCPToolProviderImpl implements MCPToolProvider{
 	 * debug logging of request metadata and execution duration.
 	 */
 	private AsyncToolSpecification toAsyncToolSpecification(MCPTool tool) {
-		McpSchema.Tool.Builder builder = new McpSchema.Tool.Builder()                                                                                                        
-				.name(tool.getName())                                                                                                                         
-				.description(tool.getDescription())                                                                                                           
-				.inputSchema(jsonMapper.get(), tool.getInputSchema());                                                            
-
+		Tool.Builder builder = Tool.builder(tool.getName(), new JacksonMcpJsonMapper(new JsonMapper()), tool.getInputSchema())
+				.description(tool.getDescription());
+		
 		if (tool.getOutputSchema() != null) {                                                                                                             
-			builder.outputSchema(jsonMapper.get(), tool.getOutputSchema());                                                   
-		}                        
+			builder.outputSchema(new JacksonMcpJsonMapper(new JsonMapper()), tool.getOutputSchema());                                                   
+		}                       
 		BiFunction<McpAsyncServerExchange, CallToolRequest, Mono<McpSchema.CallToolResult>> handler =          
 				(exchange, request) -> {
 			        long startTime = System.currentTimeMillis();
