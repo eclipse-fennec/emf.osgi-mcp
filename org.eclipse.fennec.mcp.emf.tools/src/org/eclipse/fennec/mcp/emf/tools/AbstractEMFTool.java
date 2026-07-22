@@ -20,6 +20,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.eclipse.fennec.mcp.api.AbstractMCPTool;
+import org.eclipse.fennec.mcp.emf.tools.core.EcoreAuthoring;
 import org.eclipse.fennec.mcp.emf.tools.core.ToolException;
 
 import io.modelcontextprotocol.server.McpAsyncServerExchange;
@@ -120,6 +121,24 @@ public abstract class AbstractEMFTool extends AbstractMCPTool {
 		return value == null ? null : value.intValue();
 	}
 
+	protected static java.util.List<String> optionalStringList(Map<String, Object> arguments, String key) {
+		Object value = arguments == null ? null : arguments.get(key);
+		if (value == null) {
+			return java.util.List.of();
+		}
+		if (!(value instanceof java.util.List<?> list)) {
+			throw new ToolException(String.format("Parameter '%s' must be an array of strings", key));
+		}
+		java.util.List<String> result = new java.util.ArrayList<>(list.size());
+		for (Object item : list) {
+			if (!(item instanceof String string) || string.isBlank()) {
+				throw new ToolException(String.format("Parameter '%s' must contain only non-empty strings", key));
+			}
+			result.add(string);
+		}
+		return result;
+	}
+
 	protected static boolean optionalBoolean(Map<String, Object> arguments, String key, boolean defaultValue) {
 		Object value = arguments == null ? null : arguments.get(key);
 		if (value == null) {
@@ -129,5 +148,24 @@ public abstract class AbstractEMFTool extends AbstractMCPTool {
 			return bool;
 		}
 		throw new ToolException(String.format("Parameter '%s' must be a boolean", key));
+	}
+
+	/**
+	 * Reads the common EMF structural-feature flags with generic-editor defaults
+	 * (lowerBound 0, upperBound 1, ordered/unique/changeable true, the rest false).
+	 */
+	protected static EcoreAuthoring.FeatureFlags featureFlags(Map<String, Object> arguments) {
+		Integer lower = optionalInt(arguments, "lowerBound");
+		Integer upper = optionalInt(arguments, "upperBound");
+		return new EcoreAuthoring.FeatureFlags(
+				lower == null ? 0 : lower,
+				upper == null ? 1 : upper,
+				optionalBoolean(arguments, "ordered", true),
+				optionalBoolean(arguments, "unique", true),
+				optionalBoolean(arguments, "changeable", true),
+				optionalBoolean(arguments, "volatile", false),
+				optionalBoolean(arguments, "transient", false),
+				optionalBoolean(arguments, "unsettable", false),
+				optionalBoolean(arguments, "derived", false));
 	}
 }
