@@ -62,7 +62,8 @@ public class AddEAttributeTool extends AbstractEMFTool {
 						"datasetId": { "type": "string" },
 						"classObjectId": { "type": "string" },
 						"name": { "type": "string" },
-						"eType": { "type": "string", "description": "datatype ref <nsURI>#//<Name> or dataset objectId" },
+						"eType": { "type": "string", "description": "datatype ref <nsURI>#//<Name> or dataset objectId (or use eGenericType)" },
+						"eGenericType": { "type": "object", "description": "generic type spec; alternative to eType" },
 						"lowerBound": { "type": "integer", "description": "default 0" },
 						"upperBound": { "type": "integer", "description": "default 1; -1 = unbounded" },
 						"defaultValueLiteral": { "type": "string" },
@@ -75,7 +76,7 @@ public class AddEAttributeTool extends AbstractEMFTool {
 						"unsettable": { "type": "boolean", "description": "default false" },
 						"derived": { "type": "boolean", "description": "default false" }
 					},
-					"required": ["datasetId", "classObjectId", "name", "eType"]
+					"required": ["datasetId", "classObjectId", "name"]
 				}
 				""";
 	}
@@ -88,7 +89,7 @@ public class AddEAttributeTool extends AbstractEMFTool {
 			EClass owner = EcoreAuthoring.requireEClass(dataset, requireString(arguments, "classObjectId"));
 			EAttribute attribute = EcoreFactory.eINSTANCE.createEAttribute();
 			attribute.setName(requireString(arguments, "name"));
-			attribute.setEType(EcoreAuthoring.resolveClassifier(dataset, guard.resolverFor(sessionId), requireString(arguments, "eType")));
+			EcoreAuthoring.applyType(attribute, optionalString(arguments, "eType"), arguments.get("eGenericType"), true, dataset, guard.resolverFor(sessionId));
 			EcoreAuthoring.applyFlags(attribute, featureFlags(arguments));
 			attribute.setID(optionalBoolean(arguments, "iD", false));
 			String defaultValueLiteral = optionalString(arguments, "defaultValueLiteral");

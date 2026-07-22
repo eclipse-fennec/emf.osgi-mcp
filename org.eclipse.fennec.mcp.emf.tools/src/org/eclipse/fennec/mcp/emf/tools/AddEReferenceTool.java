@@ -63,7 +63,8 @@ public class AddEReferenceTool extends AbstractEMFTool {
 						"datasetId": { "type": "string" },
 						"classObjectId": { "type": "string" },
 						"name": { "type": "string" },
-						"eType": { "type": "string", "description": "class ref <nsURI>#//<Name> or dataset objectId" },
+						"eType": { "type": "string", "description": "class ref <nsURI>#//<Name> or dataset objectId (or use eGenericType)" },
+						"eGenericType": { "type": "object", "description": "generic type spec; alternative to eType" },
 						"containment": { "type": "boolean", "description": "default false" },
 						"resolveProxies": { "type": "boolean", "description": "default true" },
 						"eOpposite": { "type": "string", "description": "objectId of the opposite EReference" },
@@ -78,7 +79,7 @@ public class AddEReferenceTool extends AbstractEMFTool {
 						"unsettable": { "type": "boolean" },
 						"derived": { "type": "boolean" }
 					},
-					"required": ["datasetId", "classObjectId", "name", "eType"]
+					"required": ["datasetId", "classObjectId", "name"]
 				}
 				""";
 	}
@@ -91,7 +92,7 @@ public class AddEReferenceTool extends AbstractEMFTool {
 			EClass owner = EcoreAuthoring.requireEClass(dataset, requireString(arguments, "classObjectId"));
 			EReference reference = EcoreFactory.eINSTANCE.createEReference();
 			reference.setName(requireString(arguments, "name"));
-			reference.setEType(EcoreAuthoring.resolveEClass(dataset, guard.resolverFor(sessionId), requireString(arguments, "eType")));
+			EcoreAuthoring.applyType(reference, optionalString(arguments, "eType"), arguments.get("eGenericType"), true, dataset, guard.resolverFor(sessionId));
 			EcoreAuthoring.applyFlags(reference, featureFlags(arguments));
 			reference.setContainment(optionalBoolean(arguments, "containment", false));
 			reference.setResolveProxies(optionalBoolean(arguments, "resolveProxies", true));

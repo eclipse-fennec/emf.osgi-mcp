@@ -25,6 +25,7 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EStructuralFeature;
+import org.eclipse.emf.ecore.ETypedElement;
 
 /**
  * Shared helpers for the reflective Ecore <i>authoring</i> tools: resolving a
@@ -125,6 +126,25 @@ public final class EcoreAuthoring {
 			throw new ToolException(String.format("Object '%s' is a %s, not an %s", objectId, eObject.eClass().getName(), label));
 		}
 		return type.cast(eObject);
+	}
+
+	/**
+	 * Applies the type of a typed element from either a plain classifier
+	 * reference ({@code eType}) or a {@code GenericType} spec ({@code eGenericType},
+	 * from which EMF derives {@code eType}). At most one may be given.
+	 */
+	public static void applyType(ETypedElement typed, String eTypeRef, Object eGenericTypeSpec, boolean required,
+			Dataset dataset, ClassifierResolver resolver) {
+		if (eGenericTypeSpec != null) {
+			if (eTypeRef != null) {
+				throw new ToolException("Set only one of 'eType' and 'eGenericType'");
+			}
+			typed.setEGenericType(GenericTypes.parse(dataset, resolver, eGenericTypeSpec));
+		} else if (eTypeRef != null) {
+			typed.setEType(resolveClassifier(dataset, resolver, eTypeRef));
+		} else if (required) {
+			throw new ToolException("Either 'eType' or 'eGenericType' is required");
+		}
 	}
 
 	/**
