@@ -14,9 +14,11 @@
  */
 package org.eclipse.fennec.mcp.emf.tools.core;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EEnum;
@@ -26,6 +28,7 @@ import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.ETypedElement;
+import org.eclipse.emf.ecore.util.Diagnostician;
 
 /**
  * Shared helpers for the reflective Ecore <i>authoring</i> tools: resolving a
@@ -68,6 +71,20 @@ public final class EcoreAuthoring {
 			dataset.putObject(id, eObject);
 			return id;
 		}
+	}
+
+	/**
+	 * Registers an object tree (root and every contained object) under dataset
+	 * ids so each element is addressable by modify_feature.
+	 *
+	 * @return the dataset id of the root
+	 */
+	public static String indexTree(Dataset dataset, EObject root, DatasetLimits limits) {
+		String rootId = put(dataset, root, limits);
+		for (Iterator<EObject> it = root.eAllContents(); it.hasNext();) {
+			put(dataset, it.next(), limits);
+		}
+		return rootId;
 	}
 
 	/**
@@ -160,6 +177,27 @@ public final class EcoreAuthoring {
 		feature.setTransient(flags.isTransient());
 		feature.setUnsettable(flags.unsettable());
 		feature.setDerived(flags.derived());
+	}
+
+	private static final int MAX_ERRORS = 10;
+
+	/**
+	 * Validates a package with the {@link Diagnostician} and rejects it if it has
+	 * errors — the gate before a package is registered/trusted.
+	 */
+	public static void requireValid(EPackage ePackage) {
+		Diagnostic diagnostic = Diagnostician.INSTANCE.validate(ePackage);
+		if (diagnostic.getSeverity() < Diagnostic.ERROR) {
+			return;
+		}
+		List<String> messages = new ArrayList<>();
+		for (Diagnostic child : diagnostic.getChildren()) {
+			if (child.getSeverity() >= Diagnostic.ERROR && messages.size() < MAX_ERRORS) {
+				messages.add(child.getMessage());
+			}
+		}
+		throw new ToolException(String.format("The metamodel '%s' has validation errors: %s",
+				ePackage.getNsURI(), messages.isEmpty() ? diagnostic.getMessage() : String.join("; ", messages)));
 	}
 
 	/**
