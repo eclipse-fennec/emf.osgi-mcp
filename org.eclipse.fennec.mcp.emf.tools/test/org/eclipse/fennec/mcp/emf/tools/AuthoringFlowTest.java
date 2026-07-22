@@ -53,6 +53,7 @@ class AuthoringFlowTest {
 	private CreateDatasetTool createDataset;
 	private CreateEPackageTool createEPackage;
 	private AddEClassTool addEClass;
+	private AddETypeParameterTool addETypeParameter;
 	private AddEAttributeTool addEAttribute;
 	private AddEReferenceTool addEReference;
 	private RegisterPackageTool registerPackage;
@@ -80,6 +81,10 @@ class AuthoringFlowTest {
 		addEClass.registry = registry;
 		addEClass.guard = guard;
 		addEClass.activate();
+		addETypeParameter = new AddETypeParameterTool();
+		addETypeParameter.registry = registry;
+		addETypeParameter.guard = guard;
+		addETypeParameter.activate();
 		addEAttribute = new AddEAttributeTool();
 		addEAttribute.registry = registry;
 		addEAttribute.guard = guard;
@@ -146,6 +151,22 @@ class AuthoringFlowTest {
 
 		String instanceXmi = (String) call(exportDataset, Map.of("datasetId", instanceDs, "validate", false)).get("content");
 		assertThat(instanceXmi).contains("Dune");
+	}
+
+	@Test
+	void authorGenericClassWithParameterizedSuperType() {
+		String metaDs = (String) call(createDataset, Map.of()).get("datasetId");
+		String pkgId = (String) call(createEPackage, Map.of("datasetId", metaDs, "name", "gen", "nsURI", "http://example.org/gen", "nsPrefix", "gen")).get("objectId");
+		// Base<T>
+		String baseId = (String) call(addEClass, Map.of("datasetId", metaDs, "packageObjectId", pkgId, "name", "Base")).get("objectId");
+		call(addETypeParameter, Map.of("datasetId", metaDs, "ownerObjectId", baseId, "name", "T"));
+		// Derived extends Base<EString>
+		call(addEClass, Map.of("datasetId", metaDs, "packageObjectId", pkgId, "name", "Derived",
+				"eGenericSuperTypes", java.util.List.of(
+						Map.of("classifier", baseId, "typeArguments", java.util.List.of(Map.of("classifier", ecore("EString")))))));
+
+		String ecoreXmi = (String) call(exportDataset, Map.of("datasetId", metaDs, "validate", false)).get("content");
+		assertThat(ecoreXmi).contains("eTypeParameters").contains("eGenericSuperTypes").contains("Base").contains("Derived");
 	}
 
 	private static String ecore(String name) {

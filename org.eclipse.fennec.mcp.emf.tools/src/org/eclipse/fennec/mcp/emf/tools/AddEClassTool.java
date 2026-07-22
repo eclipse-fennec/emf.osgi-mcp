@@ -20,10 +20,13 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.fennec.mcp.api.MCPTool;
+import org.eclipse.fennec.mcp.emf.tools.core.ClassifierResolver;
 import org.eclipse.fennec.mcp.emf.tools.core.Dataset;
 import org.eclipse.fennec.mcp.emf.tools.core.DatasetRegistry;
 import org.eclipse.fennec.mcp.emf.tools.core.EcoreAuthoring;
+import org.eclipse.fennec.mcp.emf.tools.core.GenericTypes;
 import org.eclipse.fennec.mcp.emf.tools.core.ModelGuard;
+import org.eclipse.fennec.mcp.emf.tools.core.ToolException;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
@@ -64,7 +67,8 @@ public class AddEClassTool extends AbstractEMFTool {
 						"name": { "type": "string" },
 						"abstract": { "type": "boolean", "description": "default false" },
 						"interface": { "type": "boolean", "description": "default false (implies abstract)" },
-						"eSuperTypes": { "type": "array", "items": { "type": "string" }, "description": "classifier refs or dataset objectIds" }
+						"eSuperTypes": { "type": "array", "items": { "type": "string" }, "description": "class refs or dataset objectIds" },
+						"eGenericSuperTypes": { "type": "array", "items": { "type": "object" }, "description": "generic super type specs (parameterized, e.g. Bar<T>)" }
 					},
 					"required": ["datasetId", "packageObjectId", "name"]
 				}
@@ -82,7 +86,17 @@ public class AddEClassTool extends AbstractEMFTool {
 			boolean isInterface = optionalBoolean(arguments, "interface", false);
 			eClass.setInterface(isInterface);
 			eClass.setAbstract(isInterface || optionalBoolean(arguments, "abstract", false));
-			EcoreAuthoring.addSuperTypes(dataset, eClass, optionalStringList(arguments, "eSuperTypes"), guard.resolverFor(sessionId));
+			ClassifierResolver resolver = guard.resolverFor(sessionId);
+			EcoreAuthoring.addSuperTypes(dataset, eClass, optionalStringList(arguments, "eSuperTypes"), resolver);
+			Object genericSuperTypes = arguments.get("eGenericSuperTypes");
+			if (genericSuperTypes != null) {
+				if (!(genericSuperTypes instanceof java.util.List<?> list)) {
+					throw new ToolException("'eGenericSuperTypes' must be an array of generic types");
+				}
+				for (Object spec : list) {
+					eClass.getEGenericSuperTypes().add(GenericTypes.parse(dataset, resolver, spec));
+				}
+			}
 			ePackage.getEClassifiers().add(eClass);
 			String objectId = EcoreAuthoring.put(dataset, eClass, registry.limits());
 			return Map.of("objectId", objectId, "eClass", ModelGuard.refOf(eClass), "objectCount", dataset.objectCount());

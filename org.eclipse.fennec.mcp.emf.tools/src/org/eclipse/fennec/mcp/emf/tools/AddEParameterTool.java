@@ -58,13 +58,14 @@ public class AddEParameterTool extends AbstractEMFTool {
 						"datasetId": { "type": "string" },
 						"operationObjectId": { "type": "string" },
 						"name": { "type": "string" },
-						"eType": { "type": "string", "description": "classifier ref or dataset objectId" },
+						"eType": { "type": "string", "description": "classifier ref or dataset objectId (or use eGenericType)" },
+						"eGenericType": { "type": "object", "description": "generic type spec; alternative to eType" },
 						"lowerBound": { "type": "integer", "description": "default 0" },
 						"upperBound": { "type": "integer", "description": "default 1; -1 = unbounded" },
 						"ordered": { "type": "boolean", "description": "default true" },
 						"unique": { "type": "boolean", "description": "default true" }
 					},
-					"required": ["datasetId", "operationObjectId", "name", "eType"]
+					"required": ["datasetId", "operationObjectId", "name"]
 				}
 				""";
 	}
@@ -77,7 +78,7 @@ public class AddEParameterTool extends AbstractEMFTool {
 			EOperation operation = EcoreAuthoring.requireEOperation(dataset, requireString(arguments, "operationObjectId"));
 			EParameter parameter = EcoreFactory.eINSTANCE.createEParameter();
 			parameter.setName(requireString(arguments, "name"));
-			parameter.setEType(EcoreAuthoring.resolveClassifier(dataset, guard.resolverFor(sessionId), requireString(arguments, "eType")));
+			EcoreAuthoring.applyType(parameter, optionalString(arguments, "eType"), arguments.get("eGenericType"), true, dataset, guard.resolverFor(sessionId));
 			Integer lower = optionalInt(arguments, "lowerBound");
 			Integer upper = optionalInt(arguments, "upperBound");
 			parameter.setLowerBound(lower == null ? 0 : lower);
