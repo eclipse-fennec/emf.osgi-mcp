@@ -19,6 +19,7 @@ import java.util.Map;
 import org.eclipse.fennec.mcp.api.MCPTool;
 import org.eclipse.fennec.mcp.emf.tools.core.Dataset;
 import org.eclipse.fennec.mcp.emf.tools.core.DatasetRegistry;
+import org.eclipse.fennec.mcp.emf.tools.core.ModelGuard;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
@@ -44,6 +45,8 @@ public class ModifyFeatureTool extends AbstractEMFTool {
 
 	@Reference
 	DatasetRegistry registry;
+	@Reference
+	ModelGuard guard;
 
 	@Activate
 	void activate() {
@@ -96,7 +99,8 @@ public class ModifyFeatureTool extends AbstractEMFTool {
 			String action = requireString(arguments, "action");
 			Object value = arguments.get("value");
 			Integer index = optionalInt(arguments, "index");
-			ModelOperations.modifyFeature(dataset, objectId, feature, action, value, index, registry.limits());
+			ModelOperations.modifyFeature(dataset, objectId, feature, action, value, index, registry.limits(),
+					guard.resolverFor(sessionId(exchange)));
 			return Map.of(
 					"objectId", objectId,
 					"feature", feature,

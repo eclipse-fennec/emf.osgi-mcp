@@ -21,6 +21,7 @@ import java.util.Set;
 
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EcorePackage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -107,5 +108,35 @@ class ModelGuardTest {
 		assertThatThrownBy(() -> guard.requireAllowedEClass(TestModels.NS_URI + "#//Nope"))
 				.isInstanceOf(ToolException.class)
 				.hasMessageContaining("not an EClass");
+	}
+
+	@Test
+	void builtinEcoreDatatypesAreAlwaysResolvableAsTypes() {
+		// no package needs allow-listing to use the built-in Ecore datatypes as types
+		ModelGuard guard = new ModelGuard(registry, Set.of(), Set.of());
+		assertThat(guard.requireAllowedClassifier(EcorePackage.eNS_URI + "#//EString"))
+				.isSameAs(EcorePackage.eINSTANCE.getEString());
+		assertThat(guard.resolverFor("s").resolveClassifier(EcorePackage.eNS_URI + "#//EInt"))
+				.isSameAs(EcorePackage.eINSTANCE.getEInt());
+	}
+
+	@Test
+	void requireAllowedClassifierPermitsAbstractAndNonEClass() {
+		// unlike requireAllowedEClass, typing resolution accepts abstract classes and datatypes/enums,
+		// and does not require the class allow-list (only the package must be allow-listed)
+		ModelGuard guard = new ModelGuard(registry, Set.of(TestModels.NS_URI), Set.of());
+		assertThat(guard.requireAllowedClassifier(TestModels.ABSTRACT_ITEM).getName()).isEqualTo("AbstractItem");
+		assertThat(guard.requireAllowedClassifier(TestModels.NS_URI + "#//Genre").getName()).isEqualTo("Genre");
+	}
+
+	@Test
+	void requireAllowedClassifierEnforcesPackageAllowList() {
+		ModelGuard guard = new ModelGuard(registry, Set.of(), Set.of());
+		assertThatThrownBy(() -> guard.requireAllowedClassifier(TestModels.BOOK))
+				.isInstanceOf(ToolException.class)
+				.hasMessageContaining("not allow-listed");
+		assertThatThrownBy(() -> guard.requireAllowedClassifier("nonsense"))
+				.isInstanceOf(ToolException.class)
+				.hasMessageContaining("<nsURI>#//<Name>");
 	}
 }

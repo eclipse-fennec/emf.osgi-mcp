@@ -21,9 +21,11 @@ import java.util.List;
 import java.util.Set;
 
 import org.eclipse.emf.common.util.EList;
+import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
@@ -209,5 +211,47 @@ class ModelOperationsTest {
 		assertThatThrownBy(() -> ModelOperations.replay(fresh, recipe, restricted, limits, (ds, id, cls, data) -> {
 			throw new ToolException("no codec in unit test");
 		})).isInstanceOf(ToolException.class).hasMessageContaining("not allow-listed");
+	}
+
+	@Test
+	void setResolvesRegistryClassifierRefForEType() {
+		// author-style dataset: an Ecore EAttribute whose eType is wired to a built-in datatype via a #// ref
+		Dataset authoring = new Dataset("meta", resourceSet(TestModels.registryWith(libraryPackage)), null);
+		String attrId = ModelOperations.createInstance(authoring, EcorePackage.eINSTANCE.getEAttribute(), limits);
+		ClassifierResolver resolver = guard.resolverFor("session-1");
+		String eStringRef = EcorePackage.eNS_URI + "#//EString";
+		ModelOperations.modifyFeature(authoring, attrId, "eType", "set", eStringRef, null, limits, resolver);
+
+		EAttribute attribute = (EAttribute) authoring.requireObject(attrId);
+		assertThat(attribute.getEType()).isSameAs(EcorePackage.eINSTANCE.getEString());
+		// the recipe records the classifier ref in the 'ref' slot, not the value slot
+		RecipeOp last = authoring.recipeSnapshot().get(authoring.recipeSnapshot().size() - 1);
+		assertThat(last.op()).isEqualTo(RecipeOp.OP_SET);
+		assertThat(last.ref()).isEqualTo(eStringRef);
+		assertThat(last.value()).isNull();
+	}
+
+	@Test
+	void datasetLocalOverloadRejectsRegistryClassifierRef() {
+		Dataset authoring = new Dataset("meta", resourceSet(TestModels.registryWith(libraryPackage)), null);
+		String attrId = ModelOperations.createInstance(authoring, EcorePackage.eINSTANCE.getEAttribute(), limits);
+		// the resolver-less overload is fail-closed: a #// ref cannot be resolved
+		assertThatThrownBy(() -> ModelOperations.modifyFeature(authoring, attrId, "eType", "set",
+				EcorePackage.eNS_URI + "#//EString", null, limits))
+				.isInstanceOf(ToolException.class)
+				.hasMessageContaining("not resolvable");
+	}
+
+	@Test
+	void classifierRefTypeMismatchIsRejected() {
+		// set eType with a #// ref works; but wiring an incompatible target fails the type check.
+		// eSuperTypes expects an EClass; pointing it at the EString datatype must be rejected.
+		Dataset authoring = new Dataset("meta", resourceSet(TestModels.registryWith(libraryPackage)), null);
+		String eClassId = ModelOperations.createInstance(authoring, EcorePackage.eINSTANCE.getEClass(), limits);
+		ClassifierResolver resolver = guard.resolverFor("session-1");
+		assertThatThrownBy(() -> ModelOperations.modifyFeature(authoring, eClassId, "eSuperTypes", "add",
+				EcorePackage.eNS_URI + "#//EString", null, limits, resolver))
+				.isInstanceOf(ToolException.class)
+				.hasMessageContaining("not compatible");
 	}
 }

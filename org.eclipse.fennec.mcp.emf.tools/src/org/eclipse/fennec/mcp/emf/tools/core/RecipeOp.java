@@ -30,7 +30,10 @@ import java.util.Map;
  * @param eClass   the class identifier for {@code create}/{@code fromJson}
  * @param feature  the structural feature name for feature operations
  * @param value    the attribute value or declarative JSON payload
- * @param ref      the dataset-local id of a referenced object
+ * @param ref      the reference target: a dataset-local object id ({@code o<N>})
+ *                 or a class-reference identifier ({@code <nsURI>#//<Name>}) for
+ *                 a registry/built-in classifier; the two are disambiguated by
+ *                 the {@code #//} separator, which a dataset-local id never contains
  * @param index    the optional list index for {@code add}/{@code remove}
  *
  * @author Mark Hoffmann
