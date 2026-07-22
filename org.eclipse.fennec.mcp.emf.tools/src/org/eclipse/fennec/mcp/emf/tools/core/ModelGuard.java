@@ -24,6 +24,7 @@ import java.util.logging.Logger;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.emf.osgi.ResourceSetFactory;
 import org.osgi.service.component.annotations.Activate;
@@ -168,6 +169,61 @@ public class ModelGuard {
 			throw new ToolException(String.format("EClass '%s' is abstract and cannot be instantiated", className));
 		}
 		return eClass;
+	}
+
+	/**
+	 * Resolves an allowed {@link EClassifier} from its identifier
+	 * ({@code <nsURI>#//<Name>}) for use as a <i>type</i> reference (e.g.
+	 * {@code eType}, {@code eSuperTypes}, {@code eOpposite}). Unlike
+	 * {@link #requireAllowedEClass(String)} it does <b>not</b> reject abstract
+	 * classes, interfaces or non-EClass classifiers (EDataType/EEnum) and does
+	 * not enforce the class allow-list — typing is not instantiation.
+	 * <p>
+	 * The built-in Ecore datatypes ({@code EString}, {@code EInt}, …) are always
+	 * resolvable (they are the canonical {@link EcorePackage} constants, not a
+	 * dereferenced URI); every other package must be allow-listed.
+	 *
+	 * @param classifierRef the classifier identifier
+	 * @return the resolved classifier, never {@code null}
+	 * @throws ToolException if the reference is malformed, denied or unknown
+	 */
+	public EClassifier requireAllowedClassifier(String classifierRef) {
+		if (classifierRef == null || !classifierRef.contains(CLASS_REF_SEPARATOR)) {
+			throw new ToolException("Classifier reference must have the form <nsURI>#//<Name>");
+		}
+		int separator = classifierRef.indexOf(CLASS_REF_SEPARATOR);
+		String nsUri = classifierRef.substring(0, separator);
+		String name = classifierRef.substring(separator + CLASS_REF_SEPARATOR.length());
+		EPackage ePackage = EcorePackage.eNS_URI.equals(nsUri) ? EcorePackage.eINSTANCE : requireAllowedPackage(nsUri);
+		EClassifier classifier = ePackage.getEClassifier(name);
+		if (classifier == null) {
+			throw new ToolException(String.format("'%s' is not a classifier of package '%s'. Use list_metamodel to see the available classifiers.", name, nsUri));
+		}
+		return classifier;
+	}
+
+	/**
+	 * Produces a {@link ClassifierResolver} for a single tool call. The resolver
+	 * captures this guard's resolution context so the reflective operations can
+	 * resolve {@code #//} references without knowing about the guard, the OSGi
+	 * registry or the session.
+	 *
+	 * @param sessionId the calling MCP session (used by the session-local
+	 *                  package registry; ignored while none is wired)
+	 * @return a resolver, never {@code null}
+	 */
+	public ClassifierResolver resolverFor(String sessionId) {
+		return new ClassifierResolver() {
+			@Override
+			public EClassifier resolveClassifier(String classifierRef) {
+				return requireAllowedClassifier(classifierRef);
+			}
+
+			@Override
+			public EClass resolveConcreteEClass(String eClassRef) {
+				return requireAllowedEClass(eClassRef);
+			}
+		};
 	}
 
 	/**

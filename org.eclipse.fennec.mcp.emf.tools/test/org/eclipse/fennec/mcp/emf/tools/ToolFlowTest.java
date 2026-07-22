@@ -95,6 +95,7 @@ class ToolFlowTest {
 		createInstance.activate();
 		modifyFeature = new ModifyFeatureTool();
 		modifyFeature.registry = registry;
+		modifyFeature.guard = guard;
 		modifyFeature.activate();
 		deleteInstance = new DeleteInstanceTool();
 		deleteInstance.registry = registry;
