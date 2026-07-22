@@ -18,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -61,6 +62,8 @@ class AuthoringFlowTest {
 	private ExportDatasetTool exportDataset;
 	private CreateInstanceTool createInstance;
 	private ModifyFeatureTool modifyFeature;
+	private ImportEcoreTool importEcore;
+	private ImportInstancesTool importInstances;
 
 	@BeforeEach
 	void setUp() throws Exception {
@@ -111,6 +114,14 @@ class AuthoringFlowTest {
 		modifyFeature.registry = registry;
 		modifyFeature.guard = guard;
 		modifyFeature.activate();
+		importEcore = new ImportEcoreTool();
+		importEcore.registry = registry;
+		importEcore.packages = packages;
+		importEcore.activate();
+		importInstances = new ImportInstancesTool();
+		importInstances.registry = registry;
+		importInstances.packages = packages;
+		importInstances.activate();
 	}
 
 	@Test
@@ -167,6 +178,63 @@ class AuthoringFlowTest {
 
 		String ecoreXmi = (String) call(exportDataset, Map.of("datasetId", metaDs, "validate", false)).get("content");
 		assertThat(ecoreXmi).contains("eTypeParameters").contains("eGenericSuperTypes").contains("Base").contains("Derived");
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	void roundTripThroughXmiImport() {
+		// author (without registering) and export the .ecore
+		String metaDs = (String) call(createDataset, Map.of()).get("datasetId");
+		String pkgId = (String) call(createEPackage, Map.of("datasetId", metaDs, "name", "authored", "nsURI", NS_URI, "nsPrefix", "auth")).get("objectId");
+		String bookId = (String) call(addEClass, Map.of("datasetId", metaDs, "packageObjectId", pkgId, "name", "Book")).get("objectId");
+		call(addEAttribute, Map.of("datasetId", metaDs, "classObjectId", bookId, "name", "title", "eType", ecore("EString")));
+		String ecoreXmi = (String) call(exportDataset, Map.of("datasetId", metaDs, "validate", false)).get("content");
+
+		// import the .ecore: registers the package, returns an editable dataset
+		Map<String, Object> imported = call(importEcore, Map.of("xmi", ecoreXmi));
+		assertThat(((List<Map<String, Object>>) (Object) imported.get("packages"))).hasSize(1);
+
+		// the imported package is instantiable
+		String instanceDs = (String) call(createDataset, Map.of()).get("datasetId");
+		String bookInstance = (String) call(createInstance, Map.of("datasetId", instanceDs, "eClass", NS_URI + "#//Book")).get("objectId");
+		Map<String, Object> args = new java.util.HashMap<>();
+		args.put("datasetId", instanceDs);
+		args.put("objectId", bookInstance);
+		args.put("feature", "title");
+		args.put("action", "set");
+		args.put("value", "Dune");
+		call(modifyFeature, args);
+		String instanceXmi = (String) call(exportDataset, Map.of("datasetId", instanceDs, "validate", false)).get("content");
+
+		// re-import the instances against the registered package
+		Map<String, Object> reimported = call(importInstances, Map.of("xmi", instanceXmi, "nsURI", NS_URI));
+		assertThat(((Number) reimported.get("objectCount")).intValue()).isGreaterThanOrEqualTo(1);
+		String reExported = (String) call(exportDataset, Map.of("datasetId", (String) reimported.get("datasetId"), "validate", false)).get("content");
+		assertThat(reExported).contains("Dune");
+	}
+
+	@Test
+	void importInstancesRequiresRegisteredMetamodel() {
+		String instance = """
+				<?xml version="1.0" encoding="UTF-8"?>
+				<auth:Book xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:auth="http://example.org/authored" title="Dune"/>
+				""";
+		String message = callExpectingError(importInstances, Map.of("xmi", instance, "nsURI", "http://example.org/not-registered"));
+		assertThat(message).contains("No registered package");
+	}
+
+	@Test
+	void importEcoreRejectsDoctype() {
+		String xmi = "<?xml version=\"1.0\"?>\n<!DOCTYPE x>\n<ecore:EPackage xmlns:ecore=\"http://www.eclipse.org/emf/2002/Ecore\" name=\"p\" nsURI=\"http://example.org/p\" nsPrefix=\"p\"/>";
+		String message = callExpectingError(importEcore, Map.of("xmi", xmi));
+		assertThat(message).contains("DOCTYPE");
+	}
+
+	private String callExpectingError(AbstractEMFTool tool, Map<String, Object> arguments) {
+		McpSchema.CallToolResult result = tool.execute(exchange, arguments).block();
+		assertThat(result).isNotNull();
+		assertThat(result.isError()).isEqualTo(Boolean.TRUE);
+		return ((McpSchema.TextContent) result.content().get(0)).text();
 	}
 
 	private static String ecore(String name) {

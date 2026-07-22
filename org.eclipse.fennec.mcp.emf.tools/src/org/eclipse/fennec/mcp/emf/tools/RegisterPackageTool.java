@@ -14,21 +14,16 @@
  */
 package org.eclipse.fennec.mcp.emf.tools;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
-import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EPackage;
-import org.eclipse.emf.ecore.util.Diagnostician;
 import org.eclipse.fennec.mcp.api.MCPTool;
 import org.eclipse.fennec.mcp.emf.tools.core.Dataset;
 import org.eclipse.fennec.mcp.emf.tools.core.DatasetRegistry;
 import org.eclipse.fennec.mcp.emf.tools.core.EcoreAuthoring;
 import org.eclipse.fennec.mcp.emf.tools.core.PackageRegistry;
-import org.eclipse.fennec.mcp.emf.tools.core.ToolException;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
@@ -49,8 +44,6 @@ import reactor.core.publisher.Mono;
  */
 @Component(name = "RegisterPackageTool", service = MCPTool.class, property = "tool.name=register_package")
 public class RegisterPackageTool extends AbstractEMFTool {
-
-	private static final int MAX_ERRORS = 10;
 
 	@Reference
 	DatasetRegistry registry;
@@ -84,11 +77,7 @@ public class RegisterPackageTool extends AbstractEMFTool {
 			EPackage ePackage = EcoreAuthoring.requireEPackage(dataset, requireString(arguments, "packageObjectId"));
 
 			EcoreAuthoring.requireDynamic(ePackage);
-			Diagnostic diagnostic = Diagnostician.INSTANCE.validate(ePackage);
-			if (diagnostic.getSeverity() >= Diagnostic.ERROR) {
-				throw new ToolException(String.format("Cannot register '%s': the metamodel has validation errors: %s",
-						ePackage.getNsURI(), collectErrors(diagnostic)));
-			}
+			EcoreAuthoring.requireValid(ePackage);
 
 			String previousNsURI = optionalString(arguments, "previousNsURI");
 			if (previousNsURI != null && !previousNsURI.equals(ePackage.getNsURI())) {
@@ -103,15 +92,5 @@ public class RegisterPackageTool extends AbstractEMFTool {
 			result.put("hint", "The package is now instantiable: use create_instance with <nsURI>#//<ClassName>");
 			return result;
 		});
-	}
-
-	private static String collectErrors(Diagnostic diagnostic) {
-		List<String> messages = new ArrayList<>();
-		for (Diagnostic child : diagnostic.getChildren()) {
-			if (child.getSeverity() >= Diagnostic.ERROR && messages.size() < MAX_ERRORS) {
-				messages.add(child.getMessage());
-			}
-		}
-		return messages.isEmpty() ? diagnostic.getMessage() : String.join("; ", messages);
 	}
 }
