@@ -25,11 +25,16 @@
 		"epackage.allowlist": [],
 		"eclass.allowlist": []
 	},
+	"EMFPackageRegistry": {
+		"nsuri.allowlist": [],
+		"nsuri.denylist": [],
+		"max.models:int": 100
+	},
 	"MCPToolProvider~emfModel": {
 		"name": "emf_model_tool_provider",
-		"description": "Tools to create, populate, validate and serialize EMF model instances from allow-listed EPackages",
-		"tools.target": "(|(tool.name=list_metamodel)(tool.name=describe_eclass)(tool.name=create_dataset)(tool.name=inspect_dataset)(tool.name=manage_dataset)(tool.name=export_dataset)(tool.name=create_instance)(tool.name=modify_feature)(tool.name=delete_instance)(tool.name=create_from_json)(tool.name=replay_recipe))",
-		"tools.cardinality.minimum:int": 11
+		"description": "Tools to author Ecore metamodels and to create, populate, validate and serialize EMF model instances (from allow-listed or session-registered EPackages)",
+		"tools.target": "(|(tool.name=list_metamodel)(tool.name=describe_eclass)(tool.name=create_dataset)(tool.name=inspect_dataset)(tool.name=manage_dataset)(tool.name=export_dataset)(tool.name=create_instance)(tool.name=modify_feature)(tool.name=delete_instance)(tool.name=create_from_json)(tool.name=replay_recipe)(tool.name=create_epackage)(tool.name=add_eclass)(tool.name=add_edatatype)(tool.name=add_eenum)(tool.name=add_eenum_literal)(tool.name=add_eattribute)(tool.name=add_ereference)(tool.name=add_eoperation)(tool.name=add_eparameter)(tool.name=add_eannotation)(tool.name=add_etypeparameter)(tool.name=register_package)(tool.name=unregister_package)(tool.name=list_registry)(tool.name=import_ecore)(tool.name=import_instances))",
+		"tools.cardinality.minimum:int": 27
 	},
 	"HttpMCPServerComponent~emfModel": {
 		"server.name": "osgi-emf-mcp-server",
@@ -39,6 +44,6 @@
 		"has.tool.capability": true,
 		"toolProviders.target": "(name=emf_model_tool_provider)",
 		"toolProviders.cardinality.minimum:int": 1,
-		"server.instructions": "Use this MCP server to build EMF model instances from natural-language constraints. Start with list_metamodel and describe_eclass to discover the available metamodel, then create_dataset + create_instance + modify_feature to build objects step by step. Inspect with inspect_dataset (includeRecipe=true returns a replayable build recipe), validate and serialize with export_dataset (XMI or JSON). create_from_json builds a whole instance graph in one call; replay_recipe deterministically reproduces a dataset from a recipe without LLM involvement. Note: only allow-listed EPackages/EClasses are visible and instantiable (deny-all by default)."
+		"server.instructions": "Use this MCP server to author Ecore metamodels and to build EMF model instances. INSTANCES: start with list_metamodel and describe_eclass to discover the metamodel, then create_dataset + create_instance + modify_feature to build objects; inspect_dataset (includeRecipe=true) returns a replayable recipe; export_dataset serializes XMI or JSON; create_from_json builds a whole graph in one call; replay_recipe reproduces a dataset deterministically. AUTHORING: create_dataset then create_epackage + add_eclass/add_edatatype/add_eenum(+add_eenum_literal)/add_eattribute/add_ereference/add_eoperation(+add_eparameter)/add_eannotation, with add_etypeparameter and eGenericType/eGenericSuperTypes for generics; type references are <nsURI>#//<Name> (e.g. http://www.eclipse.org/emf/2002/Ecore#//EString) or a dataset objectId; register_package validates and registers the package so its classes become instantiable (list_registry/unregister_package manage it); export_dataset (format=xmi) yields the .ecore. IMPORT: import_ecore / import_instances re-load inline XMI to keep editing across prompts (import the .ecore before its instances). SECURITY: OSGi packages are visible only when allow-listed (deny-all); authored packages register only under allow-listed namespaces and must be dynamic; imported XMI is never dereferenced externally."
 	}
 }
