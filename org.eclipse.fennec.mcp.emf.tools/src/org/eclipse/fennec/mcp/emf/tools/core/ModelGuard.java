@@ -32,6 +32,8 @@ import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Modified;
 import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicyOption;
 import org.osgi.service.metatype.annotations.Designate;
 
 /**
@@ -63,6 +65,10 @@ public class ModelGuard {
 	@Reference
 	private ResourceSetFactory resourceSetFactory;
 
+	/** Session-local authored/imported packages; optional (may be absent in tests or minimal runtimes). */
+	@Reference(cardinality = ReferenceCardinality.OPTIONAL, policyOption = ReferencePolicyOption.GREEDY)
+	private volatile PackageRegistry sessionPackages;
+
 	private volatile Set<String> packageAllowList = Set.of();
 	private volatile Set<String> classAllowList = Set.of();
 	private volatile EPackage.Registry packageRegistry;
@@ -78,6 +84,14 @@ public class ModelGuard {
 		this.packageRegistry = packageRegistry;
 		this.packageAllowList = Set.copyOf(packageAllowList);
 		this.classAllowList = Set.copyOf(classAllowList);
+	}
+
+	/**
+	 * Test constructor additionally wiring the session-local package registry.
+	 */
+	ModelGuard(EPackage.Registry packageRegistry, PackageRegistry sessionPackages, Set<String> packageAllowList, Set<String> classAllowList) {
+		this(packageRegistry, packageAllowList, classAllowList);
+		this.sessionPackages = sessionPackages;
 	}
 
 	@Activate
@@ -208,22 +222,53 @@ public class ModelGuard {
 	 * resolve {@code #//} references without knowing about the guard, the OSGi
 	 * registry or the session.
 	 *
-	 * @param sessionId the calling MCP session (used by the session-local
-	 *                  package registry; ignored while none is wired)
+	 * @param sessionId the calling MCP session; its session-local registered
+	 *                  packages are consulted first and, being already
+	 *                  policy-checked and validated, resolve without an
+	 *                  allow-list entry (they also shadow an OSGi package of the
+	 *                  same nsURI)
 	 * @return a resolver, never {@code null}
 	 */
 	public ClassifierResolver resolverFor(String sessionId) {
 		return new ClassifierResolver() {
 			@Override
 			public EClassifier resolveClassifier(String classifierRef) {
-				return requireAllowedClassifier(classifierRef);
+				EClassifier local = resolveSessionLocal(sessionId, classifierRef);
+				return local != null ? local : requireAllowedClassifier(classifierRef);
 			}
 
 			@Override
 			public EClass resolveConcreteEClass(String eClassRef) {
-				return requireAllowedEClass(eClassRef);
+				EClassifier local = resolveSessionLocal(sessionId, eClassRef);
+				return local != null ? requireConcrete(local, eClassRef) : requireAllowedEClass(eClassRef);
 			}
 		};
+	}
+
+	/**
+	 * Resolves a classifier from a session-local registered package, or
+	 * {@code null} when there is no such package (so the caller falls back to
+	 * the OSGi allow-list). A session-local hit is trusted — it already passed
+	 * the registration policy and validation.
+	 */
+	private EClassifier resolveSessionLocal(String sessionId, String classifierRef) {
+		if (sessionPackages == null || sessionId == null || classifierRef == null || !classifierRef.contains(CLASS_REF_SEPARATOR)) {
+			return null;
+		}
+		int separator = classifierRef.indexOf(CLASS_REF_SEPARATOR);
+		String nsUri = classifierRef.substring(0, separator);
+		String name = classifierRef.substring(separator + CLASS_REF_SEPARATOR.length());
+		return sessionPackages.resolveClassifier(sessionId, nsUri, name);
+	}
+
+	private static EClass requireConcrete(EClassifier classifier, String ref) {
+		if (!(classifier instanceof EClass eClass)) {
+			throw new ToolException(String.format("'%s' is not an EClass and cannot be instantiated", ref));
+		}
+		if (eClass.isAbstract() || eClass.isInterface()) {
+			throw new ToolException(String.format("EClass '%s' is abstract and cannot be instantiated", eClass.getName()));
+		}
+		return eClass;
 	}
 
 	/**

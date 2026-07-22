@@ -139,4 +139,40 @@ class ModelGuardTest {
 				.isInstanceOf(ToolException.class)
 				.hasMessageContaining("<nsURI>#//<Name>");
 	}
+
+	@Test
+	void sessionLocalPackageIsInstantiableWithoutAllowList() {
+		// deny-all OSGi allow-lists, but a registered session package is trusted
+		PackageRegistry sessionPackages = new PackageRegistry(Set.of("*"), Set.of(), 100);
+		sessionPackages.register("s1", libraryPackage);
+		ModelGuard guard = new ModelGuard(registry, sessionPackages, Set.of(), Set.of());
+
+		EClass book = guard.resolverFor("s1").resolveConcreteEClass(TestModels.BOOK);
+		assertThat(book.getName()).isEqualTo("Book");
+		// the resolved class comes from the registered snapshot, not the OSGi package (shadowing precedence)
+		assertThat(book).isNotSameAs(libraryPackage.getEClassifier("Book"));
+	}
+
+	@Test
+	void sessionLocalResolutionIsSessionScoped() {
+		PackageRegistry sessionPackages = new PackageRegistry(Set.of("*"), Set.of(), 100);
+		sessionPackages.register("s1", libraryPackage);
+		ModelGuard guard = new ModelGuard(registry, sessionPackages, Set.of(), Set.of());
+		// another session has no such package and the OSGi allow-list is empty
+		assertThatThrownBy(() -> guard.resolverFor("other").resolveConcreteEClass(TestModels.BOOK))
+				.isInstanceOf(ToolException.class)
+				.hasMessageContaining("not allow-listed");
+	}
+
+	@Test
+	void sessionLocalAbstractClassIsNotInstantiable() {
+		PackageRegistry sessionPackages = new PackageRegistry(Set.of("*"), Set.of(), 100);
+		sessionPackages.register("s1", libraryPackage);
+		ModelGuard guard = new ModelGuard(registry, sessionPackages, Set.of(), Set.of());
+		assertThatThrownBy(() -> guard.resolverFor("s1").resolveConcreteEClass(TestModels.ABSTRACT_ITEM))
+				.isInstanceOf(ToolException.class)
+				.hasMessageContaining("abstract");
+		// but it resolves fine as a type
+		assertThat(guard.resolverFor("s1").resolveClassifier(TestModels.ABSTRACT_ITEM).getName()).isEqualTo("AbstractItem");
+	}
 }

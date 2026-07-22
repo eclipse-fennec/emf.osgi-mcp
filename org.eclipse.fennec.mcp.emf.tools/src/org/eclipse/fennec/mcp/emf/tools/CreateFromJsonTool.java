@@ -83,14 +83,15 @@ public class CreateFromJsonTool extends AbstractEMFTool {
 	@Override
 	public Mono<McpSchema.CallToolResult> execute(McpAsyncServerExchange exchange, Map<String, Object> arguments) {
 		return run(() -> {
-			EClass eClass = guard.requireAllowedEClass(requireString(arguments, "eClass"));
+			String sessionId = sessionId(exchange);
+			EClass eClass = guard.resolverFor(sessionId).resolveConcreteEClass(requireString(arguments, "eClass"));
 			Object data = arguments.get("data");
 			if (!(data instanceof Map)) {
 				throw new ToolException("Parameter 'data' is required and must be a JSON object");
 			}
 			@SuppressWarnings("unchecked")
 			Map<String, Object> dataMap = (Map<String, Object>) data;
-			Dataset dataset = registry.create(sessionId(exchange), optionalLong(arguments, "seed"));
+			Dataset dataset = registry.create(sessionId, optionalLong(arguments, "seed"));
 			String objectId = dataset.nextObjectId();
 			FromJsonSupport.load(dataset, objectId, eClass, dataMap, registry.limits());
 			dataset.record(RecipeOp.fromJson(objectId, ModelGuard.refOf(eClass), dataMap));
