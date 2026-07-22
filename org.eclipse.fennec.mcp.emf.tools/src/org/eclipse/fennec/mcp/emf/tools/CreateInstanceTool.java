@@ -72,8 +72,9 @@ public class CreateInstanceTool extends AbstractEMFTool {
 	@Override
 	public Mono<McpSchema.CallToolResult> execute(McpAsyncServerExchange exchange, Map<String, Object> arguments) {
 		return run(() -> {
-			Dataset dataset = registry.require(sessionId(exchange), requireString(arguments, "datasetId"));
-			EClass eClass = guard.requireAllowedEClass(requireString(arguments, "eClass"));
+			String sessionId = sessionId(exchange);
+			Dataset dataset = registry.require(sessionId, requireString(arguments, "datasetId"));
+			EClass eClass = guard.resolverFor(sessionId).resolveConcreteEClass(requireString(arguments, "eClass"));
 			String objectId = ModelOperations.createInstance(dataset, eClass, registry.limits());
 			return Map.of(
 					"objectId", objectId,
