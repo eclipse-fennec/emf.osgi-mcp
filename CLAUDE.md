@@ -105,6 +105,6 @@ No Eclipse Platform (`org.eclipse.core.*`, `org.eclipse.ui.*`), no Xtext, no Gua
 
 ## CI/CD
 
-- **GitHub Actions**: `build.yml` (all branches except main/snapshot + PRs), `snapshot.yml` (snapshot branch), `release.yml` (main branch, GPG-signed, deploys to Central Sonatype), `license.yml` (header verification)
+- **GitHub Actions**: `build.yml` (all branches except main/snapshot + PRs; calls the org-wide `reusable-verify.yml` — license header check gates the Gradle build), `snapshot.yml` (snapshot branch), `release.yml` (main branch, GPG-signed, deploys to Central Sonatype); license check on main/snapshot runs as the first gating job inside those orchestrators
 - **SonarCloud**: project key `eclipse-fennec_emf.osgi-mcp`
 - Branch strategy: `main` -> release, `snapshot` -> snapshot deploy, other branches -> build only (skips `testOSGi`)
