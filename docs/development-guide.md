@@ -209,6 +209,40 @@ Require-Capability: \
 >        "auth.token": "change-me-to-a-long-random-secret"
 >    }
 >    ```
+> 3. **Pluggable token verification.** Register a `McpTokenVerifier` service
+>    (package `org.eclipse.fennec.mcp.api.auth`) — e.g. validating JWTs against
+>    an IdP's JWKS — and select it per endpoint via the standard DS
+>    `verifier.target` property on the `HttpMCPServerComponent~…` config. When a
+>    verifier is wired it replaces the static token compare; enforcement stays in
+>    the servlet filter, and the verified `McpPrincipal` is exposed as the
+>    `org.eclipse.fennec.mcp.auth.principal` request attribute. A verifier
+>    exception rejects the request (fail-closed). Note the loopback exemption is
+>    hardened: a loopback request carrying an `X-Forwarded-For`/`Forwarded`
+>    header (i.e. relayed by a local reverse proxy) is treated as remote.
+>
+>    The `org.eclipse.fennec.mcp.auth.jwt` bundle ships a ready-made verifier
+>    validating JWTs offline against an IdP's JWKS (signature, `iss`, `aud`,
+>    `exp`/`nbf`, `sub`; the `scope` claim becomes the principal's scopes) —
+>    one factory config per identity provider:
+>
+>    ```json
+>    "JwtTokenVerifier~keycloak": {
+>        "jwks.url": "https://idp.example.org/realms/mcp/protocol/openid-connect/certs",
+>        "issuer": "https://idp.example.org/realms/mcp",
+>        "audience": "mcp-endpoint",
+>        "verifier.name": "keycloak"
+>    },
+>    "HttpMCPServerComponent~myServer": {
+>        "…": "…",
+>        "verifier.target": "(verifier.name=keycloak)"
+>    }
+>    ```
+>
+>    Deploy `org.eclipse.fennec.mcp.auth.jwt` together with
+>    `com.nimbusds.nimbus-jose-jwt` in the runtime to enable it. A complete
+>    IdP-side walkthrough (realm, per-agent service-account clients, the audience
+>    mapper, token lifespan, curl examples) is in
+>    [mcp-auth-keycloak.md](mcp-auth-keycloak.md).
 
 ### Option B: Configuration Admin (Programmatic)
 

@@ -1,0 +1,10 @@
+Bundle-Name: Eclipse Fennec OSGi MCP JWT Token Verifier
+Bundle-Description: McpTokenVerifier validating JWT bearer tokens offline against a JWKS endpoint (signature, issuer, audience, expiry)
+
+-buildpath: \
+	org.eclipse.fennec.mcp.api;version=snapshot,\
+	com.nimbusds.nimbus-jose-jwt;version=latest,\
+	org.apache.felix.http.servlet-api;version=latest
+
+-testpath: \
+	assertj-core
