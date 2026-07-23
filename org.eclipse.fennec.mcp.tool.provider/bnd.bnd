@@ -3,6 +3,8 @@ Bundle-Description: Component that collects MCP Tools for the MCP Whiteboard
 
 -buildpath: \
 	org.osgi.namespace.implementation;version=latest,\
+	org.osgi.framework;version=latest,\
+	org.osgi.dto;version=latest,\
 	org.osgi.util.promise;version=latest,\
 	io.modelcontextprotocol.sdk.mcp-core;version=latest,\
 	io.projectreactor.reactor-core;version=latest,\
@@ -10,4 +12,10 @@ Bundle-Description: Component that collects MCP Tools for the MCP Whiteboard
 	com.fasterxml.jackson.core.jackson-annotations;version=latest,\
 	org.eclipse.fennec.mcp.api;version=snapshot,\
 	io.modelcontextprotocol.sdk.mcp-json-jackson3,\
-	tools.jackson.core.jackson-databind
+	tools.jackson.core.jackson-databind,\
+	tools.jackson.core.jackson-core
+
+-testpath: \
+	assertj-core,\
+	slf4j.api,\
+	slf4j.simple

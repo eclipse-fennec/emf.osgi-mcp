@@ -368,10 +368,32 @@ A class is usable only if its package **and** the class itself are listed. Allow
 | `create_from_json` | Whole instance graph from one JSON payload (via Fennec codec) |
 | `replay_recipe` | Rebuild a dataset deterministically from a recipe, no LLM |
 
+### Runtime introspection (service.changecount pattern)
+
+Two services follow the OSGi service-runtime pattern known from `HttpServiceRuntime`: each is registered
+with a `service.changecount` property that is bumped via `ServiceRegistration.setProperties()` whenever its
+DTO may have changed — consumers listen for the service-modified event and re-fetch the DTO instead of
+polling.
+
+- **`MCPServiceRuntime`** (exported from `org.eclipse.fennec.mcp.api.runtime`, implemented in
+  `org.eclipse.fennec.mcp.tool.provider`) describes the whiteboard itself: the active `MCPServer`s (name,
+  URL, tool/prompt/resource counts), the `MCPToolProvider`s with the tools they matched, and every
+  registered `MCPTool` service. Tools need no code for this — they are discovered as whiteboard services.
+- **`EMFToolsServiceRuntime`** (exported from `org.eclipse.fennec.mcp.emf.tools.runtime`) describes the EMF
+  domain state: the guard policy (allow-listed EPackages/EClasses), the package registry policy (nsURI
+  allow/deny lists, cap), and every session with its datasets (object/recipe counts, timestamps) and
+  registered packages.
+
+Dataset create/delete and package register/unregister are additionally logged at INFO.
+
+### Codec metadata bridge
+
+`create_from_json` and JSON export go through the Fennec codec (`CodecResource`), which only accepts packages known to its `MetadataService`. The `EMFPackageRegistry` therefore announces every session-registered package to the `MetadataWhiteboard` (optional dynamic reference — the tools also run without the codec bundles, only the JSON paths need them) and retracts it on unregister, re-register, rekey, cap eviction and session eviction. Note that the metadata service is runtime-global: if two sessions register different packages under the same nsURI, the last registration wins for codec metadata; the session package stores themselves stay isolated.
+
 ### Reproducibility
 
 Every mutating call is recorded in the dataset's **recipe**. `inspect_dataset` with `includeRecipe=true` returns it; `replay_recipe` / `manage_dataset {regenerate}` reproduce **byte-identical XMI** without LLM involvement. Replay re-validates every operation against the current allow-list.
 
 ### Resource limits
 
-The `EMFDatasetRegistry` PID caps datasets per session, objects per dataset, recipe length, value size, JSON payload size and the inline export byte cap (larger exports return a descriptor instead of content).
+The `EMFDatasetRegistry` PID caps datasets per session, objects per dataset, recipe length, value size, JSON payload size and the inline export byte cap. Exports above the cap are written to the working directory configured via `work.dir` (default: the OS temp directory, below `fennec-mcp-exports`) into a per-session subdirectory, and the tool returns a descriptor with the file path instead of the content. Export files are removed when their dataset is deleted or the owning session is evicted.

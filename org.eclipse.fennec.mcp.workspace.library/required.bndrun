@@ -7,7 +7,9 @@
 	bnd.identity;id='io.modelcontextprotocol.sdk.mcp-json-jackson3',\
 	bnd.identity;id='org.eclipse.fennec.mcp.http.component',\
 	bnd.identity;id='org.eclipse.fennec.mcp.tool.provider',\
-	bnd.identity;id='slf4j.simple'
+	bnd.identity;id='slf4j.simple',\
+	bnd.identity;id='org.eclipse.fennec.mcp.emf.tools',\
+	bnd.identity;id='org.eclipse.fennec.mcp.gogo.tools'
 -runbundles: \
 	com.ethlo.time.itu;version='[1.14.0,1.14.1)',\
 	com.fasterxml.jackson.core.jackson-annotations;version='[2.21.0,2.21.1)',\
@@ -38,7 +40,10 @@
 	tools.jackson.core.jackson-core;version='[3.1.0,3.1.1)',\
 	tools.jackson.core.jackson-databind;version='[3.1.0,3.1.1)',\
 	tools.jackson.dataformat.jackson-dataformat-yaml;version='[3.1.0,3.1.1)',\
-	com.networknt.json-schema-validator;version='[3.0.4,3.0.5)',\
 	io.modelcontextprotocol.sdk.mcp-core;version='[2.0.0,2.0.1)',\
 	io.modelcontextprotocol.sdk.mcp-json-jackson3;version='[2.0.0,2.0.1)',\
-	org.apache.commons.commons-io;version='[2.22.0,2.22.1)'
+	org.apache.commons.commons-io;version='[2.22.0,2.22.1)',\
+	org.apache.felix.gogo.runtime;version='[1.1.6,1.1.7)',\
+	org.eclipse.fennec.mcp.emf.tools;version=snapshot,\
+	org.eclipse.fennec.mcp.gogo.tools;version=snapshot,\
+	com.networknt.json-schema-validator;version='[3.0.6,3.0.7)'

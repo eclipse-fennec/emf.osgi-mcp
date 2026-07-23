@@ -45,6 +45,13 @@ public class StructuredOutputStorageHelper {
 	private static final Logger LOGGER = Logger.getLogger(StructuredOutputStorageHelper.class.getName());
 
 	/**
+	 * Synthetic absolute URI for the in-memory JSON load. A relative URI would
+	 * resolve against the process working directory and suggest filesystem
+	 * semantics; the load only ever reads from the passed stream.
+	 */
+	private static final URI STRUCTURED_OUTPUT_URI = URI.createURI("mcp://structured-output/temp.json");
+
+	/**
 	 * Deserializes a property map into an EMF EObject, using the EClass identified by its URI.
 	 * The map is first converted to JSON, then loaded through the Fennec codec resource.
 	 *
@@ -57,7 +64,7 @@ public class StructuredOutputStorageHelper {
 		try {
 			String jsonString = mapToJsonString(propertyMap);
 			InputStream inputStream = stringToInputStream(jsonString);
-			Resource resource = resourceSet.createResource(URI.createURI("temp.json"));
+			Resource resource = resourceSet.createResource(STRUCTURED_OUTPUT_URI);
 			EObject eClassEO = resourceSet.getEObject(URI.createURI(classUri), false);
 			Map<String, Object> options = new HashMap<>();
 //			options.put(EMFJs.OPTION_ROOT_ELEMENT, eClassEO);
@@ -90,7 +97,7 @@ public class StructuredOutputStorageHelper {
 		try {
 			String jsonString = mapToJsonString(propertyMap);
 			InputStream inputStream = stringToInputStream(jsonString);
-			Resource resource = resourceSet.createResource(URI.createURI("temp.json"));
+			Resource resource = resourceSet.createResource(STRUCTURED_OUTPUT_URI);
 			Map<String, Object> options = new HashMap<>();
 //			options.put(EMFJs.OPTION_ROOT_ELEMENT, eClass);
 			options.put(CodecResource.CODEC_ROOT_TYPE, eClass);
@@ -101,7 +108,7 @@ public class StructuredOutputStorageHelper {
 			}
 
 		} catch (IOException e) {
-			LOGGER.severe(String.format("IOException when trying to load structured output into known EObject of EClass %s", eClass.getInstanceClass()));
+			LOGGER.severe(String.format("IOException when trying to load structured output into known EObject of EClass %s", eClass.getName()));
 			e.printStackTrace();
 		}
 		return null;

@@ -14,14 +14,26 @@
  */
 package org.eclipse.fennec.mcp.emf.tools.core;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Stream;
 
 import org.eclipse.fennec.emf.osgi.ResourceSetFactory;
+import org.eclipse.fennec.mcp.emf.tools.runtime.DatasetDTO;
+import org.eclipse.fennec.mcp.emf.tools.runtime.SessionDTO;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Modified;
@@ -51,6 +63,8 @@ public class DatasetRegistry {
 
 	private final Map<String, SessionStore> sessions = new ConcurrentHashMap<>();
 	private volatile DatasetLimits limits = DatasetLimits.defaults();
+	private volatile Path workDir = defaultWorkDir();
+	private volatile Runnable changeListener;
 
 	private record SessionStore(Map<String, Dataset> datasets, long[] lastAccess) {
 		static SessionStore create() {
@@ -74,6 +88,14 @@ public class DatasetRegistry {
 		this.limits = limits;
 	}
 
+	/**
+	 * Test constructor additionally pinning the export working directory.
+	 */
+	DatasetRegistry(ResourceSetFactory resourceSetFactory, DatasetLimits limits, Path workDir) {
+		this(resourceSetFactory, limits);
+		this.workDir = workDir;
+	}
+
 	@Activate
 	@Modified
 	void activate(DatasetRegistryConfig config) {
@@ -85,6 +107,13 @@ public class DatasetRegistry {
 				config.max_json_payload_bytes(),
 				config.max_inline_export_bytes(),
 				config.session_ttl_minutes() * 60_000L);
+		String configured = config.work_dir();
+		this.workDir = configured == null || configured.isBlank() ? defaultWorkDir() : Path.of(configured);
+	}
+
+	private static Path defaultWorkDir() {
+		// nested below the OS temp dir so session cleanup only ever deletes our own files
+		return Path.of(System.getProperty("java.io.tmpdir"), "fennec-mcp-exports");
 	}
 
 	/**
@@ -92,6 +121,76 @@ public class DatasetRegistry {
 	 */
 	public DatasetLimits limits() {
 		return limits;
+	}
+
+	/**
+	 * Sets the single change listener, notified whenever the set of sessions
+	 * or datasets changes (create, delete, eviction). Used by the runtime
+	 * introspection service to bump its {@code service.changecount}.
+	 */
+	public void onChange(Runnable listener) {
+		this.changeListener = listener;
+	}
+
+	/**
+	 * @return a per-session runtime snapshot (datasets and last access);
+	 *         {@code registeredPackages} is left for the package registry
+	 */
+	public Map<String, SessionDTO> sessionSnapshots() {
+		Map<String, SessionDTO> result = new TreeMap<>();
+		sessions.forEach((sessionId, store) -> {
+			SessionDTO session = new SessionDTO();
+			session.sessionId = sessionId;
+			session.lastAccess = store.lastAccess()[0];
+			session.datasets = store.datasets().values().stream()
+					.sorted(Comparator.comparingLong(Dataset::getCreatedAt))
+					.map(DatasetRegistry::toDto)
+					.toArray(DatasetDTO[]::new);
+			result.put(sessionId, session);
+		});
+		return result;
+	}
+
+	private static DatasetDTO toDto(Dataset dataset) {
+		DatasetDTO dto = new DatasetDTO();
+		dto.datasetId = dataset.getId();
+		dto.objectCount = dataset.objectCount();
+		dto.recipeSize = dataset.recipeSize();
+		dto.createdAt = dataset.getCreatedAt();
+		dto.lastAccess = dataset.getLastAccess();
+		return dto;
+	}
+
+	private void notifyChanged() {
+		Runnable listener = changeListener;
+		if (listener != null) {
+			listener.run();
+		}
+	}
+
+	/**
+	 * Writes an export exceeding the inline cap into the working directory.
+	 * Files live in a per-session subdirectory (hashed session id, so foreign
+	 * session ids can never traverse outside the directory) and are removed
+	 * when their dataset is deleted or the session is evicted.
+	 *
+	 * @param sessionId the owning MCP session id
+	 * @param datasetId the dataset id (server-generated UUID)
+	 * @param format    the export format extension ({@code xmi} or {@code json})
+	 * @param content   the serialized export
+	 * @return the absolute path of the written file
+	 * @throws ToolException if the file cannot be written
+	 */
+	public Path storeExport(String sessionId, String datasetId, String format, String content) {
+		Path sessionDir = workDir.resolve(sessionDirName(requireSession(sessionId)));
+		Path file = sessionDir.resolve(datasetId + "." + format);
+		try {
+			Files.createDirectories(sessionDir);
+			Files.writeString(file, content, StandardCharsets.UTF_8);
+		} catch (IOException e) {
+			throw new ToolException(String.format("Could not write the export to the working directory '%s': %s", workDir, e.getMessage()));
+		}
+		return file.toAbsolutePath();
 	}
 
 	/**
@@ -116,6 +215,8 @@ public class DatasetRegistry {
 			}
 			Dataset dataset = new Dataset(UUID.randomUUID().toString(), resourceSetFactory.createResourceSet(), seed);
 			store.datasets().put(dataset.getId(), dataset);
+			LOGGER.info(() -> String.format("Created dataset '%s' (%d in session)", dataset.getId(), store.datasets().size()));
+			notifyChanged();
 			return dataset;
 		}
 	}
@@ -169,6 +270,9 @@ public class DatasetRegistry {
 		Dataset removed = store.datasets().remove(datasetId);
 		if (removed != null) {
 			removed.reset();
+			deleteExports(sessionId, datasetId);
+			LOGGER.info(() -> String.format("Deleted dataset '%s'", datasetId));
+			notifyChanged();
 			return true;
 		}
 		return false;
@@ -183,13 +287,58 @@ public class DatasetRegistry {
 
 	private void evictExpired() {
 		long now = System.currentTimeMillis();
+		boolean[] evicted = { false };
 		sessions.entrySet().removeIf(entry -> {
 			boolean expired = now - entry.getValue().lastAccess()[0] > limits.sessionTtlMillis();
 			if (expired) {
 				LOGGER.fine(() -> String.format("Evicting %d expired dataset(s) of an idle MCP session", entry.getValue().datasets().size()));
 				entry.getValue().datasets().values().forEach(Dataset::reset);
+				deleteSessionDir(entry.getKey());
+				evicted[0] = true;
 			}
 			return expired;
 		});
+		if (evicted[0]) {
+			notifyChanged();
+		}
+	}
+
+	private void deleteExports(String sessionId, String datasetId) {
+		Path sessionDir = workDir.resolve(sessionDirName(sessionId));
+		try {
+			Files.deleteIfExists(sessionDir.resolve(datasetId + ".xmi"));
+			Files.deleteIfExists(sessionDir.resolve(datasetId + ".json"));
+			// drop the session dir once its last export is gone
+			try (Stream<Path> remaining = Files.exists(sessionDir) ? Files.list(sessionDir) : Stream.empty()) {
+				if (remaining.findAny().isEmpty()) {
+					Files.deleteIfExists(sessionDir);
+				}
+			}
+		} catch (IOException e) {
+			LOGGER.log(Level.WARNING, e, () -> String.format("Could not clean up export files of dataset '%s'", datasetId));
+		}
+	}
+
+	private void deleteSessionDir(String sessionId) {
+		Path sessionDir = workDir.resolve(sessionDirName(sessionId));
+		if (!Files.exists(sessionDir)) {
+			return;
+		}
+		try (Stream<Path> tree = Files.walk(sessionDir)) {
+			for (Path path : tree.sorted(Comparator.reverseOrder()).toList()) {
+				Files.deleteIfExists(path);
+			}
+		} catch (IOException e) {
+			LOGGER.log(Level.WARNING, e, () -> "Could not clean up the export directory of an evicted MCP session");
+		}
+	}
+
+	private static String sessionDirName(String sessionId) {
+		try {
+			byte[] hash = MessageDigest.getInstance("SHA-256").digest(sessionId.getBytes(StandardCharsets.UTF_8));
+			return HexFormat.of().formatHex(hash, 0, 8);
+		} catch (NoSuchAlgorithmException e) {
+			throw new IllegalStateException("SHA-256 is a mandatory JCA algorithm", e);
+		}
 	}
 }

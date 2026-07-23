@@ -5,6 +5,7 @@ Bundle-Description: Whiteboard API for MCP Tools using io.contextprotocol
 
 -buildpath: \
 	org.osgi.framework;version=latest,\
+	org.osgi.dto;version=latest,\
 	org.osgi.namespace.implementation;version=latest,\
 	org.osgi.util.promise;version=latest,\
 	org.osgi.service.http.whiteboard;version=latest,\

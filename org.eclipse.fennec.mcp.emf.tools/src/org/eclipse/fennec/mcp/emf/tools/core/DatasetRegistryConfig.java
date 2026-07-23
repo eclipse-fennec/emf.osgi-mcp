@@ -41,8 +41,11 @@ public @interface DatasetRegistryConfig {
 	@AttributeDefinition(name = "Max bytes of a declarative JSON payload")
 	int max_json_payload_bytes() default 1_048_576;
 
-	@AttributeDefinition(name = "Max bytes returned inline by an export; larger exports return a descriptor only")
+	@AttributeDefinition(name = "Max bytes returned inline by an export; larger exports are written to the working directory")
 	int max_inline_export_bytes() default 65_536;
+
+	@AttributeDefinition(name = "Working directory for exports exceeding the inline cap; empty = OS temp directory")
+	String work_dir() default "";
 
 	@AttributeDefinition(name = "Idle minutes after which a session store is evicted")
 	int session_ttl_minutes() default 120;

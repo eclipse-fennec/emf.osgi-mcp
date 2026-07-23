@@ -16,6 +16,13 @@ package org.eclipse.fennec.mcp.emf.tools.core;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.Set;
 
@@ -23,7 +30,9 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.fennec.model.metadata.api.MetadataWhiteboard;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 /**
  * Tests the registration policy, cap/LRU eviction, snapshot isolation and
@@ -167,5 +176,92 @@ class PackageRegistryTest {
 		assertThatThrownBy(() -> registry.register(null, pkg("http://example.org/a")))
 				.isInstanceOf(ToolException.class)
 				.hasMessageContaining("session");
+	}
+
+	@Test
+	void registeredPackagesAreAnnouncedToTheMetadataWhiteboard() {
+		PackageRegistry registry = new PackageRegistry(Set.of("*"), Set.of(), 100);
+		MetadataWhiteboard whiteboard = mock(MetadataWhiteboard.class);
+		registry.setMetadataWhiteboard(whiteboard);
+
+		EPackage registered = registry.register("s1", pkg("http://example.org/a"));
+		verify(whiteboard).registerPackage(registered);
+
+		registry.unregister("s1", "http://example.org/a");
+		verify(whiteboard).unregisterPackage(registered);
+	}
+
+	@Test
+	void reRegisterRetractsThePreviousSnapshot() {
+		PackageRegistry registry = new PackageRegistry(Set.of("*"), Set.of(), 100);
+		MetadataWhiteboard whiteboard = mock(MetadataWhiteboard.class);
+		registry.setMetadataWhiteboard(whiteboard);
+
+		EPackage first = registry.register("s1", pkg("http://example.org/a"));
+		EPackage second = registry.register("s1", pkg("http://example.org/a"));
+		verify(whiteboard).unregisterPackage(first);
+		verify(whiteboard).registerPackage(second);
+	}
+
+	@Test
+	void capEvictionRetractsTheVictim() {
+		PackageRegistry registry = new PackageRegistry(Set.of("*"), Set.of(), 1);
+		MetadataWhiteboard whiteboard = mock(MetadataWhiteboard.class);
+		registry.setMetadataWhiteboard(whiteboard);
+
+		EPackage victim = registry.register("s1", pkg("http://example.org/a"));
+		pause();
+		registry.register("s1", pkg("http://example.org/b"));
+		verify(whiteboard).unregisterPackage(victim);
+	}
+
+	@Test
+	void rekeyReAnnouncesUnderTheNewNamespace() {
+		PackageRegistry registry = new PackageRegistry(Set.of("*"), Set.of(), 100);
+		MetadataWhiteboard whiteboard = mock(MetadataWhiteboard.class);
+		registry.setMetadataWhiteboard(whiteboard);
+
+		EPackage registered = registry.register("s1", pkg("http://example.org/a"));
+		registry.rekey("s1", "http://example.org/a", "http://example.org/b");
+		verify(whiteboard).unregisterPackage(registered);
+		ArgumentCaptor<EPackage> announced = ArgumentCaptor.forClass(EPackage.class);
+		verify(whiteboard, times(2)).registerPackage(announced.capture());
+		assertThat(announced.getValue().getNsURI()).isEqualTo("http://example.org/b");
+	}
+
+	@Test
+	void lateWhiteboardBindAnnouncesExistingPackages() {
+		PackageRegistry registry = new PackageRegistry(Set.of("*"), Set.of(), 100);
+		EPackage registered = registry.register("s1", pkg("http://example.org/a"));
+
+		MetadataWhiteboard whiteboard = mock(MetadataWhiteboard.class);
+		registry.setMetadataWhiteboard(whiteboard);
+		verify(whiteboard).registerPackage(registered);
+	}
+
+	@Test
+	void whiteboardFailuresNeverBreakRegistration() {
+		PackageRegistry registry = new PackageRegistry(Set.of("*"), Set.of(), 100);
+		MetadataWhiteboard whiteboard = mock(MetadataWhiteboard.class);
+		when(whiteboard.registerPackage(any())).thenThrow(new IllegalStateException("boom"));
+		registry.setMetadataWhiteboard(whiteboard);
+
+		EPackage registered = registry.register("s1", pkg("http://example.org/a"));
+		assertThat(registry.resolve("s1", "http://example.org/a")).isSameAs(registered);
+	}
+
+	@Test
+	void withoutWhiteboardNothingIsAnnounced() {
+		PackageRegistry registry = new PackageRegistry(Set.of("*"), Set.of(), 100);
+		MetadataWhiteboard whiteboard = mock(MetadataWhiteboard.class);
+		registry.register("s1", pkg("http://example.org/a"));
+		registry.setMetadataWhiteboard(whiteboard);
+		registry.unsetMetadataWhiteboard(whiteboard);
+		registry.register("s1", pkg("http://example.org/b"));
+		verify(whiteboard, never()).registerPackage(argNsUri("http://example.org/b"));
+	}
+
+	private static EPackage argNsUri(String nsUri) {
+		return argThat(p -> p != null && nsUri.equals(p.getNsURI()));
 	}
 }
