@@ -25,6 +25,7 @@ import org.eclipse.fennec.mcp.api.MCPServer;
 import org.eclipse.fennec.mcp.api.MCPServerConstants;
 import org.eclipse.fennec.mcp.api.MCPToolProvider;
 import org.eclipse.fennec.mcp.api.annotations.RequireMCPToolProvider;
+import org.eclipse.fennec.mcp.api.auth.McpTokenVerifier;
 import org.osgi.annotation.bundle.Capability;
 import org.osgi.annotation.bundle.Requirement;
 import org.osgi.annotation.bundle.Requirements;
@@ -37,6 +38,8 @@ import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicy;
+import org.osgi.service.component.annotations.ReferencePolicyOption;
 import org.osgi.service.metatype.annotations.Designate;
 
 import io.modelcontextprotocol.json.McpJsonMapper;
@@ -82,8 +85,15 @@ public class HttpMCPServerComponent extends AbstractHttpMCPServer{
 	private McpJsonMapperSupplier jsonMapper;
 	@Reference
 	private JsonSchemaValidatorSupplier schemaValidator;
-	@Reference(name = "toolProviders", cardinality = ReferenceCardinality.AT_LEAST_ONE) 
+	@Reference(name = "toolProviders", cardinality = ReferenceCardinality.AT_LEAST_ONE)
 	List<MCPToolProvider> toolProviders;
+	/**
+	 * Optional pluggable token verification (see McpTokenVerifier); select a
+	 * specific verifier per endpoint via the 'verifier.target' config property.
+	 * Absent = static auth.token / loopback-only behavior.
+	 */
+	@Reference(name = "verifier", cardinality = ReferenceCardinality.OPTIONAL, policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY)
+	private volatile McpTokenVerifier tokenVerifier;
 
 	@Activate
 	public void activate(
@@ -237,6 +247,15 @@ public class HttpMCPServerComponent extends AbstractHttpMCPServer{
 	@Override
 	protected String getAuthToken() {
 		return config.auth_token();
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * @see org.eclipse.fennec.mcp.api.AbstractHttpMCPServer#getTokenVerifier()
+	 */
+	@Override
+	protected McpTokenVerifier getTokenVerifier() {
+		return tokenVerifier;
 	}
 
 	/*

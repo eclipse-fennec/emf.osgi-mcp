@@ -110,7 +110,8 @@ public @interface HttpMCPServerConfig {
 			name = "Authentication Token",
 			description = "Bearer token required in the 'Authorization: Bearer <token>' header to access the MCP endpoint. "
 					+ "If left empty, only loopback (localhost) callers are permitted and any remote request is rejected. "
-					+ "Set a strong token before exposing the endpoint beyond localhost.",
+					+ "Set a strong token before exposing the endpoint beyond localhost. Ignored when a McpTokenVerifier "
+					+ "service is wired (select one via the 'verifier.target' property).",
 			type = AttributeType.PASSWORD,
 			required = false
 			)

@@ -18,6 +18,7 @@ import java.time.Duration;
 import java.util.Dictionary;
 import java.util.Hashtable;
 
+import org.eclipse.fennec.mcp.api.auth.McpTokenVerifier;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceRegistration;
 import org.osgi.service.http.whiteboard.annotations.RequireHttpWhiteboard;
@@ -87,6 +88,16 @@ public abstract class AbstractHttpMCPServer implements MCPServer {
 	protected abstract String getAuthToken();
 
 	/**
+	 * @return the pluggable token verifier guarding this endpoint, or {@code null}
+	 *         to fall back to the static token / loopback-only behavior of
+	 *         {@link McpAuthenticationFilter}. Subclasses typically wire this to an
+	 *         optional {@code McpTokenVerifier} service reference.
+	 */
+	protected McpTokenVerifier getTokenVerifier() {
+		return null;
+	}
+
+	/**
 	 * @return the interval, in seconds, at which the transport sends keep-alive pings
 	 *         to active sessions. A non-positive value disables keep-alive entirely.
 	 *         See {@link #initializeMCPServer()} for why keep-alive is off by default.
@@ -148,7 +159,7 @@ public abstract class AbstractHttpMCPServer implements MCPServer {
 		// without its authentication guard, not even during the startup window.
 		filterRegistration = context.registerService(
 				Filter.class,
-				new McpAuthenticationFilter(this::getAuthToken),
+				new McpAuthenticationFilter(this::getAuthToken, this::getTokenVerifier),
 				getFilterProperties(servletProperties)
 				);
 		sseFilterRegistration = context.registerService(

@@ -179,6 +179,7 @@ org.reactivestreams:reactive-streams:1.0.4
 com.networknt:json-schema-validator:3.0.6
 org.snakeyaml:snakeyaml-engine:2.10
 com.ethlo.time:itu:1.14.0
+com.nimbusds:nimbus-jose-jwt:10.3
 
 #time4j
 net.time4j:time4j-calendar:4.38

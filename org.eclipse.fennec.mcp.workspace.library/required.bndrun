@@ -9,7 +9,8 @@
 	bnd.identity;id='org.eclipse.fennec.mcp.tool.provider',\
 	bnd.identity;id='slf4j.simple',\
 	bnd.identity;id='org.eclipse.fennec.mcp.emf.tools',\
-	bnd.identity;id='org.eclipse.fennec.mcp.gogo.tools'
+	bnd.identity;id='org.eclipse.fennec.mcp.gogo.tools',\
+	bnd.identity;id='org.eclipse.fennec.mcp.auth.jwt'
 -runbundles: \
 	com.ethlo.time.itu;version='[1.14.0,1.14.1)',\
 	com.fasterxml.jackson.core.jackson-annotations;version='[2.21.0,2.21.1)',\
@@ -46,4 +47,7 @@
 	org.apache.felix.gogo.runtime;version='[1.1.6,1.1.7)',\
 	org.eclipse.fennec.mcp.emf.tools;version=snapshot,\
 	org.eclipse.fennec.mcp.gogo.tools;version=snapshot,\
-	com.networknt.json-schema-validator;version='[3.0.6,3.0.7)'
+	com.networknt.json-schema-validator;version='[3.0.6,3.0.7)',\
+	com.nimbusds.nimbus-jose-jwt;version='[10.3.0,10.3.1)',\
+	org.eclipse.fennec.mcp.auth.jwt;version=snapshot,\
+	org.osgi.service.servlet;version='[2.0.0,2.0.1)'
