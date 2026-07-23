@@ -1,0 +1,8 @@
+-resourceonly: true
+-includeresource: OSGI-INF/configurator/=configs/
+Bundle-Name: Eclipse Fennec EMF Metamodel MCP Runtime Configuration
+Bundle-Description: Test configuration for the EMF metamodel authoring MCP runtime (HTTP on /mcp/emf, port 8090; registration open for testing)
+-workingset: emf
+Require-Capability: \
+	osgi.extender;filter:='(osgi.extender=osgi.configurator)',\
+	osgi.implementation;filter:='(&(osgi.implementation=osgi.cm)(version>=1.6.0)(!(version>=2.0.0)))'

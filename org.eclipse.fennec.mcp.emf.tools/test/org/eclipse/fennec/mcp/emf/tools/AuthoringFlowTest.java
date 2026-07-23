@@ -125,7 +125,6 @@ class AuthoringFlowTest {
 	}
 
 	@Test
-	@SuppressWarnings("unchecked")
 	void authorRegisterInstantiateExport() {
 		// author the metamodel
 		String metaDs = (String) call(createDataset, Map.of()).get("datasetId");

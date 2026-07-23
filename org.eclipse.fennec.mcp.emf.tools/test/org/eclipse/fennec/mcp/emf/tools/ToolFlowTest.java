@@ -19,6 +19,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +36,7 @@ import org.eclipse.fennec.mcp.emf.tools.core.ModelGuard;
 import org.eclipse.fennec.mcp.emf.tools.core.TestModels;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import io.modelcontextprotocol.server.McpAsyncServerExchange;
 import io.modelcontextprotocol.spec.McpSchema;
@@ -127,6 +130,12 @@ class ToolFlowTest {
 		var constructor = DatasetRegistry.class.getDeclaredConstructor(ResourceSetFactory.class, DatasetLimits.class);
 		constructor.setAccessible(true);
 		return constructor.newInstance(factory, limits);
+	}
+
+	private static DatasetRegistry registryFor(ResourceSetFactory factory, DatasetLimits limits, Path workDir) throws Exception {
+		var constructor = DatasetRegistry.class.getDeclaredConstructor(ResourceSetFactory.class, DatasetLimits.class, Path.class);
+		constructor.setAccessible(true);
+		return constructor.newInstance(factory, limits, workDir);
 	}
 
 	@SuppressWarnings("unchecked")
@@ -253,19 +262,20 @@ class ToolFlowTest {
 	}
 
 	@Test
-	void oversizedExportReturnsDescriptorInsteadOfContent() throws Exception {
-		// re-wire with a tiny inline cap
+	void oversizedExportIsWrittenToTheWorkDir(@TempDir Path workDir) throws Exception {
+		// re-wire with a tiny inline cap and a pinned working directory
 		EPackage.Registry packageRegistry = TestModels.registryWith(TestModels.libraryPackage());
 		ResourceSetFactory factory = () -> {
 			ResourceSetImpl resourceSet = new ResourceSetImpl();
 			resourceSet.setPackageRegistry(new EPackageRegistryImpl(packageRegistry));
 			return resourceSet;
 		};
-		DatasetRegistry tinyRegistry = registryFor(factory, new DatasetLimits(16, 1000, 10_000, 65_536, 1_048_576, 64, 60_000L));
+		DatasetRegistry tinyRegistry = registryFor(factory, new DatasetLimits(16, 1000, 10_000, 65_536, 1_048_576, 64, 60_000L), workDir);
 		setField(createDataset, "registry", tinyRegistry);
 		setField(createInstance, "registry", tinyRegistry);
 		setField(modifyFeature, "registry", tinyRegistry);
 		setField(exportDataset, "registry", tinyRegistry);
+		setField(manageDataset, "registry", tinyRegistry);
 
 		String datasetId = (String) call(createDataset, Map.of()).get("datasetId");
 		String libraryId = (String) call(createInstance, Map.of("datasetId", datasetId, "eClass", TestModels.LIBRARY)).get("objectId");
@@ -275,6 +285,16 @@ class ToolFlowTest {
 		assertThat(export.get("inline")).isEqualTo(Boolean.FALSE);
 		assertThat((String) export.get("resourceUri")).startsWith("fennec-mcp://datasets/");
 		assertThat((Integer) export.get("byteSize")).isGreaterThan(64);
+
+		// the export lands as a file below the working directory, session-scoped
+		Path file = Path.of((String) export.get("file"));
+		assertThat(file).exists().hasParent(workDir.resolve(file.getParent().getFileName()));
+		assertThat(Files.readString(file)).contains("A library with a name long enough to exceed the cap");
+
+		// deleting the dataset removes the export file and its session directory
+		call(manageDataset, Map.of("datasetId", datasetId, "action", "delete"));
+		assertThat(file).doesNotExist();
+		assertThat(file.getParent()).doesNotExist();
 	}
 
 	@Test

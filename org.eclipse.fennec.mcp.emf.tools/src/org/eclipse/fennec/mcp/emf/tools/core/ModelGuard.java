@@ -72,6 +72,7 @@ public class ModelGuard {
 	private volatile Set<String> packageAllowList = Set.of();
 	private volatile Set<String> classAllowList = Set.of();
 	private volatile EPackage.Registry packageRegistry;
+	private volatile Runnable policyChangeListener;
 
 	public ModelGuard() {
 		// default constructor for DS
@@ -106,6 +107,33 @@ public class ModelGuard {
 		this.classAllowList = Set.of(config.eclass_allowlist());
 		LOGGER.info(() -> String.format("EMF model guard updated: %d allow-listed EPackage(s), %d allow-listed EClass(es)",
 				packageAllowList.size(), classAllowList.size()));
+		Runnable listener = policyChangeListener;
+		if (listener != null) {
+			listener.run();
+		}
+	}
+
+	/**
+	 * Sets the single policy change listener, notified on configuration
+	 * updates. Used by the runtime introspection service to bump its
+	 * {@code service.changecount}.
+	 */
+	public void onPolicyChange(Runnable listener) {
+		this.policyChangeListener = listener;
+	}
+
+	/**
+	 * @return the configured EPackage allow-list, sorted
+	 */
+	public String[] packageAllowListSnapshot() {
+		return packageAllowList.stream().sorted().toArray(String[]::new);
+	}
+
+	/**
+	 * @return the configured EClass allow-list, sorted
+	 */
+	public String[] classAllowListSnapshot() {
+		return classAllowList.stream().sorted().toArray(String[]::new);
 	}
 
 	/**

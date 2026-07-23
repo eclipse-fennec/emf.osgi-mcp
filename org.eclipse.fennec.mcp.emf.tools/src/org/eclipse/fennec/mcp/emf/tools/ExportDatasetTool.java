@@ -15,6 +15,7 @@
 package org.eclipse.fennec.mcp.emf.tools;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -39,8 +40,9 @@ import reactor.core.publisher.Mono;
  * MCP tool serializing a dataset. Format {@code xmi} (default) returns one
  * XMI document containing all root objects; format {@code json} returns one
  * JSON object per root (via the Fennec codec). Content is returned inline
- * only up to the configured byte cap — larger exports return a descriptor
- * (size, counts, export URI) instead, protecting the agent's context and the
+ * only up to the configured byte cap — larger exports are written to the
+ * configured working directory and return a descriptor (size, counts, file
+ * path, export URI) instead, protecting the agent's context and the
  * transport.
  *
  * @author Mark Hoffmann
@@ -57,8 +59,8 @@ public class ExportDatasetTool extends AbstractEMFTool {
 		this.name = "export_dataset";
 		this.description = "Serialize all root objects of a dataset. Format 'xmi' (default) returns one " +
 				"XMI document, 'json' returns one JSON object per root. Set validate=true to include a " +
-				"validation report. Exports larger than the configured inline cap return a descriptor " +
-				"instead of the content.";
+				"validation report. Exports larger than the configured inline cap are written to the " +
+				"server's working directory and return a descriptor with the file path instead of the content.";
 		this.inputSchema = """
 				{
 					"type": "object",
@@ -110,10 +112,13 @@ public class ExportDatasetTool extends AbstractEMFTool {
 				result.put("content", content);
 			} else {
 				result.put("inline", false);
+				Path file = registry.storeExport(sessionId(exchange), dataset.getId(), format, content);
+				result.put("file", file.toString());
 				result.put("resourceUri", Exports.exportUri(dataset, format));
 				result.put("note", String.format(
-						"Export of %d bytes exceeds the inline cap of %d bytes. Reduce the dataset, "
-								+ "or raise max.inline.export.bytes in the EMFDatasetRegistry configuration.", byteSize, cap));
+						"Export of %d bytes exceeds the inline cap of %d bytes and was written to '%s'. "
+								+ "Raise max.inline.export.bytes in the EMFDatasetRegistry configuration to inline more.",
+						byteSize, cap, file));
 			}
 			return result;
 		});

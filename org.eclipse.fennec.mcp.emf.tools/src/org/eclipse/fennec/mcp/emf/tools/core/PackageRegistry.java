@@ -20,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
@@ -27,9 +28,17 @@ import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.fennec.mcp.emf.tools.runtime.PackageRegistryPolicyDTO;
+import org.eclipse.fennec.mcp.emf.tools.runtime.RegisteredPackageDTO;
+import org.eclipse.fennec.mcp.emf.tools.runtime.SessionDTO;
+import org.eclipse.fennec.model.metadata.api.MetadataWhiteboard;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Modified;
+import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicy;
+import org.osgi.service.component.annotations.ReferencePolicyOption;
 import org.osgi.service.metatype.annotations.Designate;
 
 /**
@@ -70,6 +79,8 @@ public class PackageRegistry {
 	private volatile List<String> denyList = List.of();
 	private volatile int maxModels = 100;
 	private volatile long sessionTtlMillis = 120 * 60_000L;
+	private volatile MetadataWhiteboard metadataWhiteboard;
+	private volatile Runnable changeListener;
 
 	private static final class Registered {
 		final EPackage ePackage;
@@ -103,6 +114,30 @@ public class PackageRegistry {
 		this.maxModels = maxModels;
 	}
 
+	/**
+	 * Binds the Fennec codec's metadata whiteboard, if present in the runtime.
+	 * {@code CodecResource} refuses to (de)serialize instances of packages the
+	 * {@code MetadataService} does not know; without this bridge,
+	 * {@code create_from_json} and JSON export only work for OSGi-registered
+	 * models. Packages registered before the whiteboard appeared are announced
+	 * retroactively.
+	 */
+	@Reference(cardinality = ReferenceCardinality.OPTIONAL, policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY)
+	void setMetadataWhiteboard(MetadataWhiteboard whiteboard) {
+		this.metadataWhiteboard = whiteboard;
+		sessions.values().forEach(store -> {
+			synchronized (store) {
+				store.packages.values().forEach(registered -> announce(registered.ePackage));
+			}
+		});
+	}
+
+	void unsetMetadataWhiteboard(MetadataWhiteboard whiteboard) {
+		if (this.metadataWhiteboard == whiteboard) {
+			this.metadataWhiteboard = null;
+		}
+	}
+
 	@Activate
 	@Modified
 	void activate(EMFPackageRegistryConfig config) {
@@ -112,6 +147,62 @@ public class PackageRegistry {
 		this.sessionTtlMillis = config.session_ttl_minutes() * 60_000L;
 		LOGGER.info(() -> String.format("EMF package registry policy: %d allow pattern(s), %d deny pattern(s), max %d model(s) per session",
 				allowList.size(), denyList.size(), maxModels));
+	}
+
+	/**
+	 * Sets the single change listener, notified whenever a package is
+	 * registered, replaced, rekeyed, unregistered or evicted. Used by the
+	 * runtime introspection service to bump its {@code service.changecount}.
+	 */
+	public void onChange(Runnable listener) {
+		this.changeListener = listener;
+	}
+
+	/**
+	 * @return the current registration policy as DTO
+	 */
+	public PackageRegistryPolicyDTO policySnapshot() {
+		PackageRegistryPolicyDTO dto = new PackageRegistryPolicyDTO();
+		dto.nsUriAllowList = allowList.toArray(String[]::new);
+		dto.nsUriDenyList = denyList.toArray(String[]::new);
+		dto.maxModels = maxModels;
+		return dto;
+	}
+
+	/**
+	 * @return a per-session runtime snapshot (registered packages and last
+	 *         access); {@code datasets} is left for the dataset registry
+	 */
+	public Map<String, SessionDTO> sessionSnapshots() {
+		Map<String, SessionDTO> result = new TreeMap<>();
+		sessions.forEach((sessionId, store) -> {
+			SessionDTO session = new SessionDTO();
+			session.sessionId = sessionId;
+			session.lastAccess = store.lastAccess;
+			synchronized (store) {
+				session.registeredPackages = store.packages.values().stream()
+						.map(PackageRegistry::toDto)
+						.toArray(RegisteredPackageDTO[]::new);
+			}
+			result.put(sessionId, session);
+		});
+		return result;
+	}
+
+	private static RegisteredPackageDTO toDto(Registered registered) {
+		RegisteredPackageDTO dto = new RegisteredPackageDTO();
+		dto.nsUri = registered.ePackage.getNsURI();
+		dto.name = registered.ePackage.getName();
+		dto.classifierCount = registered.ePackage.getEClassifiers().size();
+		dto.lastModified = registered.lastModified;
+		return dto;
+	}
+
+	private void notifyChanged() {
+		Runnable listener = changeListener;
+		if (listener != null) {
+			listener.run();
+		}
 	}
 
 	/**
@@ -140,8 +231,14 @@ public class PackageRegistry {
 			if (!store.packages.containsKey(nsUri) && store.packages.size() >= maxModels) {
 				evictLeastRecentlyModified(store);
 			}
-			store.packages.put(nsUri, new Registered(copy, now));
+			Registered previous = store.packages.put(nsUri, new Registered(copy, now));
+			if (previous != null) {
+				retract(previous.ePackage);
+			}
+			announce(copy);
 		}
+		LOGGER.info(() -> String.format("Registered session package '%s' (%d classifier(s))", nsUri, copy.getEClassifiers().size()));
+		notifyChanged();
 		return copy;
 	}
 
@@ -157,7 +254,14 @@ public class PackageRegistry {
 		}
 		store.touch();
 		synchronized (store) {
-			return store.packages.remove(nsUri) != null;
+			Registered removed = store.packages.remove(nsUri);
+			if (removed != null) {
+				retract(removed.ePackage);
+				LOGGER.info(() -> String.format("Unregistered session package '%s'", nsUri));
+				notifyChanged();
+				return true;
+			}
+			return false;
 		}
 	}
 
@@ -184,9 +288,13 @@ public class PackageRegistry {
 			if (registered == null) {
 				throw new ToolException(String.format("No registered package '%s' in this session", oldNsUri));
 			}
+			// the metadata service indexes by nsURI — re-announce under the new one
+			retract(registered.ePackage);
 			registered.ePackage.setNsURI(newNsUri);
 			registered.lastModified = System.currentTimeMillis();
 			store.packages.put(newNsUri, registered);
+			announce(registered.ePackage);
+			notifyChanged();
 			return registered.ePackage;
 		}
 	}
@@ -279,7 +387,7 @@ public class PackageRegistry {
 		return false;
 	}
 
-	private static void evictLeastRecentlyModified(SessionPackages store) {
+	private void evictLeastRecentlyModified(SessionPackages store) {
 		String victim = null;
 		long oldest = Long.MAX_VALUE;
 		for (Map.Entry<String, Registered> entry : store.packages.entrySet()) {
@@ -289,7 +397,8 @@ public class PackageRegistry {
 			}
 		}
 		if (victim != null) {
-			store.packages.remove(victim);
+			Registered removed = store.packages.remove(victim);
+			retract(removed.ePackage);
 			String evicted = victim;
 			LOGGER.info(() -> String.format("EMF package registry cap reached; evicted least-recently-modified package '%s'", evicted));
 		}
@@ -304,6 +413,50 @@ public class PackageRegistry {
 
 	private void evictExpired() {
 		long now = System.currentTimeMillis();
-		sessions.entrySet().removeIf(entry -> now - entry.getValue().lastAccess > sessionTtlMillis);
+		boolean[] evicted = { false };
+		sessions.entrySet().removeIf(entry -> {
+			boolean expired = now - entry.getValue().lastAccess > sessionTtlMillis;
+			if (expired) {
+				SessionPackages store = entry.getValue();
+				synchronized (store) {
+					store.packages.values().forEach(registered -> retract(registered.ePackage));
+				}
+				evicted[0] = true;
+			}
+			return expired;
+		});
+		if (evicted[0]) {
+			notifyChanged();
+		}
+	}
+
+	/**
+	 * Best-effort announcement to the codec metadata service. Sessions share
+	 * one runtime-wide metadata service, so the last registration of a
+	 * namespace URI wins across sessions; the frozen copies keep the sessions'
+	 * datasets themselves isolated. A failure must never break registration.
+	 */
+	private void announce(EPackage ePackage) {
+		MetadataWhiteboard whiteboard = metadataWhiteboard;
+		if (whiteboard == null) {
+			return;
+		}
+		try {
+			whiteboard.registerPackage(ePackage);
+		} catch (RuntimeException e) {
+			LOGGER.warning(() -> String.format("Could not announce package '%s' to the codec metadata service: %s", ePackage.getNsURI(), e));
+		}
+	}
+
+	private void retract(EPackage ePackage) {
+		MetadataWhiteboard whiteboard = metadataWhiteboard;
+		if (whiteboard == null) {
+			return;
+		}
+		try {
+			whiteboard.unregisterPackage(ePackage);
+		} catch (RuntimeException e) {
+			LOGGER.warning(() -> String.format("Could not retract package '%s' from the codec metadata service: %s", ePackage.getNsURI(), e));
+		}
 	}
 }

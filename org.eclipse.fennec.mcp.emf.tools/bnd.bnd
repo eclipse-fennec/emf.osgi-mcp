@@ -11,6 +11,16 @@ Bundle-Description: MCP tools to create, populate, validate and serialize EMF mo
 	tools.jackson.core.jackson-databind;version=latest,\
 	tools.jackson.core.jackson-core;version=latest,\
 	com.fasterxml.jackson.core.jackson-annotations;version=latest,\
+	org.eclipse.fennec.model.metadata;version=latest,\
+	org.osgi.framework;version=latest,\
+	org.osgi.dto;version=latest,\
 	org.eclipse.fennec.mcp.api;version=snapshot
+
+# The codec metadata bridge is optional: without the Fennec codec in the
+# runtime the tools work, only create_from_json/JSON export need it.
+Import-Package: \
+	org.eclipse.fennec.model.metadata.api;resolution:=optional,\
+	org.eclipse.fennec.model.metadata;resolution:=optional,\
+	*
 
 -testpath: assertj-core
