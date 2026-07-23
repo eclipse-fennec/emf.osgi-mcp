@@ -180,8 +180,12 @@ com.networknt:json-schema-validator:3.0.6
 org.snakeyaml:snakeyaml-engine:2.10
 com.ethlo.time:itu:1.14.0
 com.nimbusds:nimbus-jose-jwt:10.3
+org.eclipse.fennec.util:org.eclipse.fennec.service.api:1.0.0-SNAPSHOT
 
 #time4j
 net.time4j:time4j-calendar:4.38
 net.time4j:time4j-base:5.9.4
 
+org.eclipse.fennec.util:org.eclipse.fennec.openapi.osgi:1.0.0-SNAPSHOT
+org.eclipse.fennec.util:org.eclipse.fennec.openapi.client:1.0.0-SNAPSHOT
+org.eclipse.fennec.util:org.eclipse.fennec.openapi.ecore:1.0.0-SNAPSHOT

@@ -102,6 +102,9 @@ public class HttpMCPServerComponent extends AbstractHttpMCPServer{
 		this.config = config;
 		this.context = context;
 		initializeMCPServer();
+		// propagate dynamic tool changes (e.g. bridged ServiceClient tools) to
+		// connected clients via notifications/tools/list_changed
+		toolProviders.forEach(provider -> provider.onToolsChanged(this::syncTools));
 	}
 	
 	@Deactivate

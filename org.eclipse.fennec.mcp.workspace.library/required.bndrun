@@ -7,10 +7,11 @@
 	bnd.identity;id='io.modelcontextprotocol.sdk.mcp-json-jackson3',\
 	bnd.identity;id='org.eclipse.fennec.mcp.http.component',\
 	bnd.identity;id='org.eclipse.fennec.mcp.tool.provider',\
-	bnd.identity;id='slf4j.simple',\
+	bnd.identity;id='org.eclipse.fennec.mcp.auth.jwt',\
 	bnd.identity;id='org.eclipse.fennec.mcp.emf.tools',\
 	bnd.identity;id='org.eclipse.fennec.mcp.gogo.tools',\
-	bnd.identity;id='org.eclipse.fennec.mcp.auth.jwt'
+	bnd.identity;id='slf4j.simple'
+	
 -runbundles: \
 	com.ethlo.time.itu;version='[1.14.0,1.14.1)',\
 	com.fasterxml.jackson.core.jackson-annotations;version='[2.21.0,2.21.1)',\

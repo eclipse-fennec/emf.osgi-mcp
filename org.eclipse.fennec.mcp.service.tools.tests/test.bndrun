@@ -1,0 +1,26 @@
+-library: enableOSGi-Test
+
+-runsystempackages: com.sun.net.httpserver
+
+# The test bundle plus everything wired by DS/config (capability resolution
+# alone would not pull it): SCR, ConfigAdmin, the OpenAPI client component,
+# the bridge under test and the codec/metadata pipeline it depends on.
+-runrequires: \
+	bnd.identity;id='org.eclipse.fennec.mcp.service.tools.tests',\
+	bnd.identity;id='org.eclipse.fennec.mcp.service.tools',\
+	bnd.identity;id='org.eclipse.fennec.openapi.osgi',\
+	bnd.identity;id='org.apache.felix.scr',\
+	bnd.identity;id='org.apache.felix.configadmin',\
+	bnd.identity;id='org.eclipse.fennec.model.metadata',\
+	bnd.identity;id='org.eclipse.fennec.codec',\
+	bnd.identity;id='org.eclipse.fennec.codec.metadata',\
+	bnd.identity;id='org.eclipse.fennec.codec.openapi',\
+	bnd.identity;id='org.eclipse.fennec.codec.jsonschema',\
+	bnd.identity;id='org.eclipse.fennec.emf.osgi.component.minimal'
+
+-runbundles.test: \
+	org.eclipse.fennec.mcp.service.tools.tests;version=snapshot
+
+-runfw: org.apache.felix.framework
+
+-runee: JavaSE-21

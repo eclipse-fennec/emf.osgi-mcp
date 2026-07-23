@@ -1,0 +1,16 @@
+Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE}
+Bundle-Name: Eclipse Fennec OSGi MCP Service Client Tools OSGi Test
+Bundle-Description: Cross-repo integration test - an imported OpenAPI document surfaces as callable MCP tools
+
+-library: \
+	enableOSGi-Test,\
+	enableEMF
+
+-buildpath: \
+	org.osgi.framework;version=latest,\
+	org.osgi.service.cm;version=latest,\
+	org.eclipse.fennec.service.api;version=latest,\
+	org.eclipse.fennec.mcp.api;version=snapshot,\
+	io.modelcontextprotocol.sdk.mcp-core;version=latest,\
+	io.projectreactor.reactor-core;version=latest,\
+	reactive-streams;version=latest

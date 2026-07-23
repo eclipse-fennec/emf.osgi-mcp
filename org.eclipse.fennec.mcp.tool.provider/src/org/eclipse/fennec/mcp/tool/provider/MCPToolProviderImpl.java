@@ -16,6 +16,7 @@ package org.eclipse.fennec.mcp.tool.provider;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiFunction;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -30,6 +31,7 @@ import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicy;
 import org.osgi.service.metatype.annotations.Designate;
 
 import io.modelcontextprotocol.json.McpJsonMapperSupplier;
@@ -72,8 +74,31 @@ public class MCPToolProviderImpl implements MCPToolProvider{
 	
 	@Reference
 	private McpJsonMapperSupplier jsonMapper;
-	@Reference(name = "tools", cardinality = ReferenceCardinality.AT_LEAST_ONE)
-	private List<MCPTool> tools;
+	private final List<MCPTool> tools = new CopyOnWriteArrayList<>();
+	private volatile Runnable changeListener;
+
+	@Reference(name = "tools", cardinality = ReferenceCardinality.AT_LEAST_ONE, policy = ReferencePolicy.DYNAMIC)
+	void addTool(MCPTool tool) {
+		tools.add(tool);
+		notifyChanged();
+	}
+
+	void removeTool(MCPTool tool) {
+		tools.remove(tool);
+		notifyChanged();
+	}
+
+	@Override
+	public void onToolsChanged(Runnable listener) {
+		this.changeListener = listener;
+	}
+
+	private void notifyChanged() {
+		Runnable listener = changeListener;
+		if (listener != null) {
+			listener.run();
+		}
+	}
 
 	@Activate
 	public MCPToolProviderImpl(MCPToolProviderConfig config) {

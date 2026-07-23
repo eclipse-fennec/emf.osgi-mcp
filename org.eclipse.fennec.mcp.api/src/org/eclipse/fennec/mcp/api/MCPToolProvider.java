@@ -44,4 +44,17 @@ public interface MCPToolProvider {
 	 * @return a human-readable description of what kinds of tools this provider collects
 	 */
 	String getDescription();
+
+	/**
+	 * Sets the single listener notified when the provider's tool set changes
+	 * after startup (dynamically registered/unregistered {@code MCPTool}
+	 * services). Servers use it to propagate changes to connected MCP clients
+	 * via {@code notifications/tools/list_changed}. Providers with a static
+	 * tool set may ignore it.
+	 *
+	 * @param listener the change listener
+	 */
+	default void onToolsChanged(Runnable listener) {
+		// static providers: nothing to notify
+	}
 }

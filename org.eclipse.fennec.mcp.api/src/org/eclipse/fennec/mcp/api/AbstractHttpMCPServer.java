@@ -17,6 +17,11 @@ package org.eclipse.fennec.mcp.api;
 import java.time.Duration;
 import java.util.Dictionary;
 import java.util.Hashtable;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.eclipse.fennec.mcp.api.auth.McpTokenVerifier;
 import org.osgi.framework.BundleContext;
@@ -27,6 +32,7 @@ import io.modelcontextprotocol.json.McpJsonMapper;
 import io.modelcontextprotocol.json.schema.JsonSchemaValidator;
 import io.modelcontextprotocol.server.McpAsyncServer;
 import io.modelcontextprotocol.server.McpServer;
+import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.server.transport.HttpServletStreamableServerTransportProvider;
 import io.modelcontextprotocol.spec.McpSchema;
 import jakarta.servlet.Filter;
@@ -145,7 +151,37 @@ public abstract class AbstractHttpMCPServer implements MCPServer {
 				.requestTimeout(Duration.ofMinutes(10))
 				.instructions(getInstructions())
 				.build();
-		
+		registeredToolNames.clear();
+		getTools().forEach(spec -> registeredToolNames.add(spec.tool().name()));
+	}
+
+	private final Set<String> registeredToolNames = ConcurrentHashMap.newKeySet();
+
+	/**
+	 * Propagates tool changes to the running MCP server. Diffs the current
+	 * {@link #getTools()} against what the SDK server has registered and calls
+	 * {@code addTool}/{@code removeTool}, which emit
+	 * {@code notifications/tools/list_changed} to connected clients. Safe to
+	 * call before initialization (no-op) and from provider change listeners.
+	 */
+	protected synchronized void syncTools() {
+		McpAsyncServer server = mcpServer;
+		if (server == null) {
+			return;
+		}
+		Map<String, McpServerFeatures.AsyncToolSpecification> current = new LinkedHashMap<>();
+		getTools().forEach(spec -> current.putIfAbsent(spec.tool().name(), spec));
+		for (String name : List.copyOf(registeredToolNames)) {
+			if (!current.containsKey(name)) {
+				registeredToolNames.remove(name);
+				server.removeTool(name).subscribe();
+			}
+		}
+		current.forEach((name, spec) -> {
+			if (registeredToolNames.add(name)) {
+				server.addTool(spec).subscribe();
+			}
+		});
 	}
 
 	/**

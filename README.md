@@ -61,6 +61,8 @@ MCPTool services → MCPToolProvider (aggregator) → HttpMCPServerComponent (HT
 ## Documentation
 
 - **[Development Guide](docs/development-guide.md)** — How to write custom MCP tools, configure tool providers and HTTP servers, LDAP filter chaining, structured EMF output
+- **[ServiceClient Bridge](docs/service-client-bridge.md)** — Expose imported SOAP/OpenAPI/gRPC operations (emf.util `ServiceClient`s) as MCP tools via configuration
+- **[Keycloak Authentication](docs/mcp-auth-keycloak.md)** — Per-client expiring JWT bearer tokens for the MCP endpoint
 
 ## Extending
 

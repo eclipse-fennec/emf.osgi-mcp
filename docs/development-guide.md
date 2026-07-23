@@ -250,6 +250,12 @@ Use any OSGi Configuration Admin mechanism (FileInstall, REST, Gogo commands, et
 
 ### Configuration Reference
 
+Further PIDs are documented where their feature lives: `JwtTokenVerifier` in
+[mcp-auth-keycloak.md](mcp-auth-keycloak.md), `ServiceClientToolBridge` in
+[service-client-bridge.md](service-client-bridge.md), the EMF PIDs
+(`EMFModelGuard`, `EMFPackageRegistry`, `EMFDatasetRegistry`) in
+[emf-metamodel-authoring.md](emf-metamodel-authoring.md).
+
 #### MCPToolProvider
 
 | Property | Type | Required | Description |
