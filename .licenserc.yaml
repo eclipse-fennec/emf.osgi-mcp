@@ -29,6 +29,7 @@ header:
     - '**/*.csv'
     - '**/*.json'
     - '**/*.ecore'
+    - '**/*.xmi'
     - '**/*.xcore'
     - '**/*.genmodel'
     - '**/*.md'
