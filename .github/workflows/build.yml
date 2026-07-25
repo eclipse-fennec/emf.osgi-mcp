@@ -20,6 +20,5 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # License gate first, Gradle build/test/testOSGi/perfTest only if it passed.
   verify:
     uses: eclipse-fennec/.github/.github/workflows/reusable-verify.yml@227b1dfa5f323fdd6d857d0a61fbaaf6e7288716 # v1.0.0
