@@ -107,6 +107,11 @@ No Eclipse Platform (`org.eclipse.core.*`, `org.eclipse.ui.*`), no Xtext, no Gua
 
 ## CI/CD
 
-- **GitHub Actions**: `build.yml` (all branches except main/snapshot + PRs; calls the org-wide `reusable-verify.yml` — license header check gates the Gradle build), `snapshot.yml` (snapshot branch), `release.yml` (main branch, GPG-signed, deploys to Central Sonatype); license check on main/snapshot runs as the first gating job inside those orchestrators
+- **GitHub Actions**: all six workflows are thin callers into the org-wide reusables in [`eclipse-fennec/.github`](https://github.com/eclipse-fennec/.github), SHA-pinned with the version tag as a trailing comment. No workflow carries inline steps — change CI logic there, not here.
+  - `build.yml` (all branches except main/snapshot + PRs) → `reusable-verify`
+  - `snapshot.yml` (snapshot branch) → `reusable-verify` → `reusable-release` (`do-release: false`) → `reusable-docs`
+  - `release.yml` (main branch) → the same chain with `do-release: true` (GPG-signed, deploys to Central Sonatype)
+  - `docs.yml` (`workflow_dispatch` only) → `reusable-docs`; `dependency-review.yml` → `reusable-dependency-review`; `scorecard.yml` → `reusable-scorecard` (scan scopes sit on the calling job)
+  - `reusable-verify` runs the license header check as the first gating job, then `./gradlew clean build testOSGi` on the Java 21 + 25 matrix and `./gradlew perfTest`. Secrets reach only `reusable-release`, via `secrets: inherit`.
 - **SonarCloud**: project key `eclipse-fennec_emf.osgi-mcp`
-- Branch strategy: `main` -> release, `snapshot` -> snapshot deploy, other branches -> build only (skips `testOSGi`)
+- Branch strategy: `main` -> release, `snapshot` -> snapshot deploy, other branches -> build only (verify, no publish)
