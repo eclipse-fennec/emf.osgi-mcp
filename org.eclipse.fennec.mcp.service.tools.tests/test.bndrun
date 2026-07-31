@@ -11,7 +11,7 @@
 	bnd.identity;id='org.eclipse.fennec.openapi.osgi',\
 	bnd.identity;id='org.apache.felix.scr',\
 	bnd.identity;id='org.apache.felix.configadmin',\
-	bnd.identity;id='org.eclipse.fennec.model.metadata',\
+	bnd.identity;id='org.eclipse.fennec.emf.osgi.metadata',\
 	bnd.identity;id='org.eclipse.fennec.codec',\
 	bnd.identity;id='org.eclipse.fennec.codec.metadata',\
 	bnd.identity;id='org.eclipse.fennec.codec.openapi',\

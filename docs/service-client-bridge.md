@@ -118,7 +118,7 @@ Bundles required in addition to the MCP core stack (`mcp.api`,
 
 - `org.eclipse.fennec.mcp.service.tools` (the bridge)
 - the client implementation, e.g. `org.eclipse.fennec.openapi.osgi` + `org.eclipse.fennec.openapi.client` + `org.eclipse.fennec.openapi.ecore`
-- the codec pipeline: `org.eclipse.fennec.codec`, `org.eclipse.fennec.codec.metadata`, `org.eclipse.fennec.codec.jsonschema`, `org.eclipse.fennec.model.metadata` (+ `org.eclipse.fennec.codec.openapi` for OpenAPI imports)
+- the codec pipeline: `org.eclipse.fennec.codec`, `org.eclipse.fennec.codec.metadata`, `org.eclipse.fennec.codec.jsonschema`, `org.eclipse.fennec.emf.osgi.metadata` (+ `org.eclipse.fennec.codec.openapi` for OpenAPI imports)
 - `org.eclipse.fennec.emf.osgi.component.minimal` (ResourceSetFactory)
 
 The `test.bndrun` of `org.eclipse.fennec.mcp.service.tools.tests` is a
@@ -133,7 +133,7 @@ resolvable, working reference for the exact closure.
 - **Duplicate name skipped** (see the log): two operations sanitized to the
   same tool name — disambiguate via `tools.prefix`.
 - **Execution fails with a codec error**: the metadata bridge is optional —
-  make sure `org.eclipse.fennec.model.metadata` is deployed so the imported
+  make sure `org.eclipse.fennec.emf.osgi.metadata` is deployed so the imported
   packages can be announced to the `MetadataWhiteboard`.
 
 ## Dynamics (`notifications/tools/list_changed`)

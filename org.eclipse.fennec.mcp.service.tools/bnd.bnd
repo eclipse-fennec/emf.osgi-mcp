@@ -8,8 +8,8 @@ Bundle-Description: Whiteboard bridge exposing ServiceClient operations (SOAP/Op
 	org.eclipse.fennec.service.api;version=latest,\
 	org.eclipse.fennec.codec.api;version=latest,\
 	org.eclipse.fennec.codec.jsonschema;version=latest,\
-	org.eclipse.fennec.model.metadata;version=latest,\
-	org.eclipse.fennec.model.metadata.api;version=latest,\
+	org.eclipse.fennec.codec.metadata;version=latest,\
+	org.eclipse.fennec.emf.osgi.metadata;version=latest,\
 	org.osgi.framework;version=latest,\
 	io.modelcontextprotocol.sdk.mcp-core;version=latest,\
 	io.projectreactor.reactor-core;version=latest,\
@@ -20,8 +20,7 @@ Bundle-Description: Whiteboard bridge exposing ServiceClient operations (SOAP/Op
 # The codec metadata bridge is optional; without it only tools whose packages
 # are OSGi-registered can execute.
 Import-Package: \
-	org.eclipse.fennec.model.metadata.api;resolution:=optional,\
-	org.eclipse.fennec.model.metadata;resolution:=optional,\
+	org.eclipse.fennec.emf.osgi.metadata;resolution:=optional,\
 	*
 
 -testpath: \

@@ -31,7 +31,7 @@ import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.mcp.emf.tools.runtime.PackageRegistryPolicyDTO;
 import org.eclipse.fennec.mcp.emf.tools.runtime.RegisteredPackageDTO;
 import org.eclipse.fennec.mcp.emf.tools.runtime.SessionDTO;
-import org.eclipse.fennec.model.metadata.api.MetadataWhiteboard;
+import org.eclipse.fennec.emf.osgi.metadata.MetadataWhiteboard;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Modified;

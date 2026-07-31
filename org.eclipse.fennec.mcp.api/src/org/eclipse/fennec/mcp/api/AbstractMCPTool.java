@@ -31,7 +31,7 @@ import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.codec.config.ConfigProperty;
 import org.eclipse.fennec.codec.jsonschema.v2.constants.CodecJsonSchemaOptions;
-import org.eclipse.fennec.model.metadata.TypeStrategy;
+import org.eclipse.fennec.codec.metadata.model.codec.TypeStrategy;
 
 import tools.jackson.databind.json.JsonMapper;
 

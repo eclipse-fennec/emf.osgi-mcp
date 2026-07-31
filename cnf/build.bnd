@@ -7,7 +7,6 @@
 	fennecTest,\
 	fennecJacoco,\
 	fennecEMF,\
-	fennecEMFMetadata,\
 	fennecCodec,\
 	geckoLibraries
 
