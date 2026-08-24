@@ -95,7 +95,9 @@ class CodecPayloads implements SchemaGenerator, PayloadCodec {
 	public String toJson(EObject response) {
 		Resource resource = resourceSetFactory.createResourceSet()
 				.createResource(URI.createURI(UUID.randomUUID() + ".json"));
-		resource.getContents().add(response);
+		// serialize a copy - adding the original would re-parent the response out of the
+		// resource (or container) that owns it
+		resource.getContents().add(EcoreUtil.copy(response));
 		Map<String, Object> options = new HashMap<>();
 		options.put(ConfigProperty.SERIALIZE_NULL.getKey(), false);
 		options.put(ConfigProperty.TYPE_STRATEGY.getKey(), TypeStrategy.NONE);
