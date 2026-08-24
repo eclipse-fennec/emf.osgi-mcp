@@ -29,6 +29,7 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.resource.ResourceSet;
+import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.codec.config.ConfigProperty;
 import org.eclipse.fennec.codec.jsonschema.v2.constants.CodecJsonSchemaOptions;
 import org.eclipse.fennec.codec.metadata.model.codec.TypeStrategy;
@@ -129,16 +130,19 @@ public abstract class AbstractMCPTool implements MCPTool {
 		}
 		EClass eClass =(EClass) eObj;
 		Resource resource = resourceSet.createResource(URI.createURI(UUID.randomUUID().toString().concat(".jsonschema")));
-		resource.getContents().add(eClass);
-		Map<String, Object> options = new HashMap<>();
-		options.put(CodecJsonSchemaOptions.OPTION_INLINE_REFS, true);
-		options.put(CodecJsonSchemaOptions.OPTION_SUPPRESS_VENDOR_EXTENSIONS, true);
-		ByteArrayOutputStream out = new ByteArrayOutputStream();
-		resource.save(out, options);
-		String json = out.toString(StandardCharsets.UTF_8);
-//		System.out.println(json);		
-		return json;
-
+		try {
+			// serialize a copy - Resource#getContents() is a containment list, so adding the
+			// live EClass would re-parent it out of its (registered, shared) EPackage
+			resource.getContents().add(EcoreUtil.copy(eClass));
+			Map<String, Object> options = new HashMap<>();
+			options.put(CodecJsonSchemaOptions.OPTION_INLINE_REFS, true);
+			options.put(CodecJsonSchemaOptions.OPTION_SUPPRESS_VENDOR_EXTENSIONS, true);
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			resource.save(out, options);
+			return out.toString(StandardCharsets.UTF_8);
+		} finally {
+			resourceSet.getResources().remove(resource);
+		}
 	}
 	
 	/**
@@ -153,17 +157,23 @@ public abstract class AbstractMCPTool implements MCPTool {
 	 */
 	protected Map<String, Object> saveEObjectToString(EObject eObject, ResourceSet resourceSet) throws IOException {
 		Resource resource = resourceSet.createResource(URI.createURI(UUID.randomUUID().toString().concat(".json")));
-		resource.getContents().add(eObject);
-		Map<String, Object> options = new HashMap<>();
-		options.put(ConfigProperty.SERIALIZE_NULL.getKey(), false);
-		options.put(ConfigProperty.TYPE_STRATEGY.getKey(), TypeStrategy.NONE);
-		options.put(ConfigProperty.ID_KEY_MODE.getKey(), "NONE");
-		options.put(ConfigProperty.SERIALIZE_DEFAULT.getKey(), true);
-		ByteArrayOutputStream out = new ByteArrayOutputStream();
-		resource.save(out, options);
-		String json = out.toString(StandardCharsets.UTF_8);
-		@SuppressWarnings("unchecked")
-		Map<String, Object> map = JsonMapper.builder().build().readValue(json, Map.class);
-		return map;
+		try {
+			// serialize a copy - adding the live object would move it out of the resource
+			// (or container) that owns it, emptying the caller's model
+			resource.getContents().add(EcoreUtil.copy(eObject));
+			Map<String, Object> options = new HashMap<>();
+			options.put(ConfigProperty.SERIALIZE_NULL.getKey(), false);
+			options.put(ConfigProperty.TYPE_STRATEGY.getKey(), TypeStrategy.NONE);
+			options.put(ConfigProperty.ID_KEY_MODE.getKey(), "NONE");
+			options.put(ConfigProperty.SERIALIZE_DEFAULT.getKey(), true);
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			resource.save(out, options);
+			String json = out.toString(StandardCharsets.UTF_8);
+			@SuppressWarnings("unchecked")
+			Map<String, Object> map = JsonMapper.builder().build().readValue(json, Map.class);
+			return map;
+		} finally {
+			resourceSet.getResources().remove(resource);
+		}
 	}
 }

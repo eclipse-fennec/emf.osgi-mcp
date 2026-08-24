@@ -10,5 +10,10 @@ Bundle-Description: MCP server to introspect a running OSGi environment using th
 	org.apache.felix.gogo.runtime;version=latest,\
 	org.eclipse.fennec.mcp.api;version=snapshot
 
--testpath: assertj-core
+# AbstractMCPTool carries the EMF-based schema helpers, so linking it - which any
+# subclass instantiation does - needs the Ecore classes on the test classpath.
+-testpath: \
+	assertj-core,\
+	org.eclipse.emf.common;version=latest,\
+	org.eclipse.emf.ecore;version=latest
 
