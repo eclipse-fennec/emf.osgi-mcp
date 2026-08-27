@@ -99,7 +99,7 @@ TOKEN=$(curl -s -X POST \
 # call the MCP endpoint
 curl -H "Authorization: Bearer $TOKEN" \
      -H "Content-Type: application/json" \
-     https://<mcp-host>:8090/mcp/emf -d '{"jsonrpc":"2.0","id":1,"method":"ping"}'
+     https://<mcp-host>:8099/mcp/emf -d '{"jsonrpc":"2.0","id":1,"method":"ping"}'
 ```
 
 MCP clients that support custom headers (e.g. Claude Code via
