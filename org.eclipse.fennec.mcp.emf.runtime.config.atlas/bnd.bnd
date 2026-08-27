@@ -1,0 +1,10 @@
+-resourceonly: true
+-includeresource: OSGI-INF/configurator/=configs/
+Bundle-Name: Eclipse Fennec EMF Metamodel MCP Runtime Atlas Configuration
+Bundle-Description: Optional overlay that points the MCP runtime at a model.atlas scope. \
+ Deploying this bundle alongside org.eclipse.fennec.model.atlas.rest.client.osgi is what makes \
+ atlas-hosted EPackages visible to the tools; without it the runtime is fully enclosed.
+-workingset: emf
+Require-Capability: \
+	osgi.extender;filter:='(osgi.extender=osgi.configurator)',\
+	osgi.implementation;filter:='(&(osgi.implementation=osgi.cm)(version>=1.6.0)(!(version>=2.0.0)))'
