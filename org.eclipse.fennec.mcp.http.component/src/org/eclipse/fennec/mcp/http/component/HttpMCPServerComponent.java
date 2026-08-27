@@ -21,6 +21,7 @@ import java.util.List;
 
 import org.eclipse.fennec.emf.osgi.annotation.require.RequireEMF;
 import org.eclipse.fennec.mcp.api.AbstractHttpMCPServer;
+import org.eclipse.fennec.mcp.api.MCPEndpoint;
 import org.eclipse.fennec.mcp.api.MCPServer;
 import org.eclipse.fennec.mcp.api.MCPServerConstants;
 import org.eclipse.fennec.mcp.api.MCPToolProvider;
@@ -66,7 +67,11 @@ import org.osgi.service.servlet.whiteboard.annotations.RequireHttpWhiteboard;
  * @author ilenia
  * @since Dec 2, 2025
  */
-@Component(name = "HttpMCPServerComponent", service = {MCPServer.class}, configurationPid = "HttpMCPServerComponent", configurationPolicy = ConfigurationPolicy.REQUIRE)
+// Both types, one registration: existing consumers keep binding to MCPServer,
+// and a client that only needs the address binds to MCPEndpoint and is satisfied
+// by this or by a RemoteMCPEndpoint without knowing which. Service properties are
+// unchanged.
+@Component(name = "HttpMCPServerComponent", service = {MCPServer.class, MCPEndpoint.class}, configurationPid = "HttpMCPServerComponent", configurationPolicy = ConfigurationPolicy.REQUIRE)
 @Designate(ocd = HttpMCPServerConfig.class)
 @Capability(namespace = ImplementationNamespace.IMPLEMENTATION_NAMESPACE, name = MCPServerConstants.MCP_WHITEBOARD_IMPLEMENTATION, version = MCPServerConstants.MCP_WHITEBOARD_VERSION)
 @Requirements({
