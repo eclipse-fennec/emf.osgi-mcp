@@ -20,7 +20,8 @@
 | Author | `create_epackage`, `add_eclass`, `add_edatatype`, `add_eenum`, `add_eenum_literal`, `add_eattribute`, `add_ereference`, `add_eoperation`, `add_eparameter`, `add_eannotation`, `add_etypeparameter` |
 | Register | `register_package`, `unregister_package`, `list_registry` |
 | Import | `import_ecore`, `import_instances` |
-| (existing, now session-aware) | `create_instance`, `create_from_json`, `modify_feature`, `list_metamodel`, `describe_eclass`, `export_dataset`, … |
+| Export | `export_dataset`, `export_package` |
+| (existing, now session-aware) | `create_instance`, `create_from_json`, `modify_feature`, `list_metamodel`, `describe_eclass`, … |
 
 Type references are `<nsURI>#//<Name>` (built-in Ecore datatypes such as
 `http://www.eclipse.org/emf/2002/Ecore#//EString`, or a registered package) or a
@@ -28,6 +29,52 @@ dataset-local `objectId` of a classifier authored in the same dataset. Generics
 use a recursive `GenericType` shape (`classifier` | `typeParameter` |
 `typeArguments` | `upperBound` | `lowerBound`) via `eGenericType` /
 `eGenericSuperTypes` / `eGenericExceptions`.
+
+### Reading a metamodel in full: `export_package`
+
+`describe_eclass` reports a class's *shape*, never its source, and three things
+fall through the gap:
+
+- **EAnnotations are invisible.** The describer emits name, package, `abstract`,
+  supertypes, documentation and features — no annotations. So an existing
+  model's codec configuration cannot be seen, let alone copied: not the
+  `typeMapping/{mapId}` source, not `ExtendedMetaData` wire names.
+- **Abstract classes are unreachable.** `list_metamodel` filters them out and
+  `describe_eclass` throws on them — yet an abstract base is exactly what a new
+  model needs to extend.
+- **Supertypes come back as bare names**, with no nsURI, so the
+  `<nsURI>#//<Name>` that `add_eclass`'s `eSuperTypes` needs cannot be built
+  from them.
+
+`export_package(nsURI)` returns the whole `.ecore`, which carries all three
+correctly. It is symmetric with `import_ecore`: inline XMI out, inline XMI in.
+
+**Cross-package references.** A class extending a class in another package is
+written as an external `href="<nsURI>#//<Name>"` and the referenced package is
+*not* inlined. Getting this right needs two things EMF does not do by default:
+each package is placed in a resource keyed by its **namespace URI** (a frozen
+registry package has no resource at all, which is what made a package-only
+`export_dataset` fail with *"… is not contained in a resource"*), and href
+**deresolution is disabled** (otherwise two packages sharing a host serialize as
+a bare relative segment, `lorawan#//UplinkMessage`, that no importer can
+resolve). A document with external references will therefore not re-import into
+a *fresh* session — `import_ecore` seeds no packages and rejects unresolved
+ones. That is expected: import the referenced package first.
+
+**Which packages can be exported.** A package registered by the current session
+(`register_package` / `import_ecore`) exports as-is — it already passed the
+registration policy, and handing an agent back its own model discloses nothing.
+An OSGi-registered package must be on `epackage.allowlist` **and** every one of
+its EClasses on `eclass.allowlist`: a `.ecore` is the whole package and cannot
+be filtered the way a structured describer can. A partial allow-list is refused
+with a *count* of withheld classes, never their names.
+
+This is the widest-disclosure tool in the bundle — annotations may carry
+persistence and codec details — which is an argument for keeping
+`epackage.allowlist` to the packages actually needed, not for withholding the
+tool. It is the "read narrow to copy" half of the division of labour with
+[`org.eclipse.fennec.mcp.metadata.tools`](metadata-discovery-tools.md), which
+queries wide to *locate* a model.
 
 ### End-to-end walkthrough
 
@@ -37,7 +84,8 @@ use a recursive `GenericType` shape (`classifier` | `typeParameter` |
    (`eType` = a dataset objectId or `#//` ref), … build the model.
 4. `register_package` → validates (`Diagnostician`), enforces dynamic-only and
    the nsURI policy, registers a frozen copy; the classes are now instantiable.
-5. `export_dataset` (`format=xmi`) → the `.ecore`.
+5. `export_dataset` (`format=xmi`) → the `.ecore` of the dataset, or
+   `export_package` (`nsURI=…`) → the `.ecore` of the registered package alone.
 6. `create_instance` (`eClass=<nsURI>#//<Class>`) + `modify_feature` in a new
    dataset → instances; `export_dataset` → instance XMI.
 7. Next prompt: `import_ecore` (paste the `.ecore`) then `import_instances`

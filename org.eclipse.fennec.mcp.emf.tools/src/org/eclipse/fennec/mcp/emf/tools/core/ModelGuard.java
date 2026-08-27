@@ -16,6 +16,7 @@ package org.eclipse.fennec.mcp.emf.tools.core;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
@@ -40,12 +41,24 @@ import org.osgi.service.metatype.annotations.Designate;
  * Central allow-list enforcement for the EMF model MCP tools
  * (security-by-default, deny-all).
  * <p>
- * An {@link EClass} is usable only if its {@link EPackage} namespace URI is on
- * the package allow-list <b>and</b> the class identifier
- * ({@code <nsURI>#//<ClassName>}) is on the class allow-list. Empty lists deny
- * everything. The allow-lists are admin-owned configuration; allow-listing a
- * package implies trusting its generated factory and datatype conversion code,
- * which runs in-process.
+ * An {@link EClass} is usable only if its {@link EPackage} namespace URI is
+ * admitted by the package allow-list <b>and</b> the class identifier
+ * ({@code <nsURI>#//<ClassName>}) is admitted by the class allow-list. Empty
+ * lists deny everything. The allow-lists are admin-owned configuration;
+ * allow-listing a package implies trusting its generated factory and datatype
+ * conversion code, which runs in-process.
+ * <p>
+ * Both lists speak {@link NsUriPatterns}: an exact entry, a {@code prefix*}, or a
+ * bare {@code *}. The two stay <b>independent</b> — a package pattern says what
+ * may be seen, never what may be instantiated, so widening the package list does
+ * not expose a single class. An empty class list is still deny-all however wide
+ * the package list is.
+ * <p>
+ * Patterns exist because a registry is not always fully known when the
+ * configuration is written: packages mirrored from a model.atlas scope arrive
+ * after startup, and before this the metadata discovery tools could find such a
+ * package while {@code list_metamodel} and {@code describe_eclass} could not read
+ * it — visible but unreadable, and only a human could resolve it.
  * <p>
  * EClass resolution happens exclusively against the OSGi EPackage registry —
  * never by dereferencing agent-supplied URIs through a {@link ResourceSet}
@@ -103,8 +116,11 @@ public class ModelGuard {
 
 	@Modified
 	void update(ModelGuardConfig config) {
-		this.packageAllowList = Set.of(config.epackage_allowlist());
-		this.classAllowList = Set.of(config.eclass_allowlist());
+		// Set.copyOf, not Set.of: Set.of throws on a duplicate entry, and a list
+		// someone hand-edits should tolerate a repeated line rather than refusing to
+		// activate the guard at all.
+		this.packageAllowList = Set.copyOf(List.of(config.epackage_allowlist()));
+		this.classAllowList = Set.copyOf(List.of(config.eclass_allowlist()));
 		LOGGER.info(() -> String.format("EMF model guard updated: %d allow-listed EPackage(s), %d allow-listed EClass(es)",
 				packageAllowList.size(), classAllowList.size()));
 		Runnable listener = policyChangeListener;
@@ -145,13 +161,27 @@ public class ModelGuard {
 	}
 
 	/**
-	 * Returns the allow-listed packages that are actually resolvable in the
-	 * registry, sorted by namespace URI for deterministic output.
+	 * Returns the registered packages the allow-list admits, sorted by namespace
+	 * URI for deterministic output.
+	 * <p>
+	 * This filters the <b>registry</b> rather than resolving the allow-list's
+	 * entries, and that direction is the point: with a {@code prefix*} or {@code *}
+	 * rule the set of admitted namespaces is not enumerable from the configuration
+	 * at all. It is also what lets a package that arrives <em>after</em> startup —
+	 * one mirrored from a model.atlas scope, say — be listed and read without
+	 * anyone editing configuration to name it.
+	 * <p>
+	 * A namespace whose descriptor fails to resolve is skipped, not fatal: one bad
+	 * entry in a large registry must not blank out {@code list_metamodel}.
+	 *
 	 * @return the allowed packages, never {@code null}
 	 */
 	public List<EPackage> allowedPackages() {
 		List<EPackage> result = new ArrayList<>();
-		for (String nsUri : packageAllowList) {
+		for (String nsUri : candidateNamespaces()) {
+			if (!NsUriPatterns.matches(packageAllowList, nsUri)) {
+				continue;
+			}
 			EPackage ePackage = resolvePackage(nsUri);
 			if (ePackage != null) {
 				result.add(ePackage);
@@ -159,6 +189,36 @@ public class ModelGuard {
 		}
 		result.sort(Comparator.comparing(EPackage::getNsURI));
 		return result;
+	}
+
+	/**
+	 * The namespaces worth resolving: what the registry enumerates, plus the
+	 * allow-list's own literal entries.
+	 * <p>
+	 * The second half is not redundant. Enumerating a registry is only as complete
+	 * as its {@code keySet()}: a registry that delegates without overriding it
+	 * reports its local entries only, and a purely enumerative implementation would
+	 * then quietly return nothing for a configuration that used to work. Adding the
+	 * literals back makes "exact entries behave exactly as before" true by
+	 * construction — only {@code prefix*} and {@code *} depend on the registry being
+	 * enumerable, and those cannot be satisfied any other way.
+	 * <p>
+	 * Reading the registry is guarded: it is live, and a whiteboard change
+	 * concurrent with a tool call must not surface as a failed call.
+	 */
+	private Set<String> candidateNamespaces() {
+		Set<String> candidates = new LinkedHashSet<>();
+		try {
+			candidates.addAll(packageRegistry.keySet());
+		} catch (Exception e) {
+			LOGGER.log(Level.WARNING, e, () -> "Failed to enumerate the EPackage registry");
+		}
+		for (String pattern : packageAllowList) {
+			if (pattern != null && !pattern.isBlank() && !pattern.endsWith(NsUriPatterns.WILDCARD)) {
+				candidates.add(pattern);
+			}
+		}
+		return candidates;
 	}
 
 	/**
@@ -172,7 +232,7 @@ public class ModelGuard {
 			throw new ToolException("Parameter 'nsURI' must not be empty");
 		}
 		// Check the allow-list before touching the registry, so denied input never probes anything
-		if (!packageAllowList.contains(nsUri)) {
+		if (!NsUriPatterns.matches(packageAllowList, nsUri)) {
 			throw new ToolException(String.format("EPackage '%s' is not allow-listed. Use list_metamodel to see the available packages.", nsUri));
 		}
 		EPackage ePackage = resolvePackage(nsUri);
@@ -306,8 +366,8 @@ public class ModelGuard {
 	public boolean isClassAllowed(EClass eClass) {
 		EPackage ePackage = eClass.getEPackage();
 		return ePackage != null
-				&& packageAllowList.contains(ePackage.getNsURI())
-				&& classAllowList.contains(refOf(eClass));
+				&& NsUriPatterns.matches(packageAllowList, ePackage.getNsURI())
+				&& NsUriPatterns.matches(classAllowList, refOf(eClass));
 	}
 
 	/**
