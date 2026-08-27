@@ -22,6 +22,7 @@ import java.util.Set;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -174,5 +175,131 @@ class ModelGuardTest {
 				.hasMessageContaining("abstract");
 		// but it resolves fine as a type
 		assertThat(guard.resolverFor("s1").resolveClassifier(TestModels.ABSTRACT_ITEM).getName()).isEqualTo("AbstractItem");
+	}
+
+	// --- pattern allow-lists (issue #30) ---------------------------------------
+
+	@Test
+	void anExactAllowListStillBehavesExactly() {
+		// The change must be inert for every deployment that uses no '*'.
+		ModelGuard guard = new ModelGuard(registry, Set.of(TestModels.NS_URI), Set.of(TestModels.BOOK));
+
+		assertThat(guard.allowedPackages()).containsExactly(libraryPackage);
+		assertThat(guard.requireAllowedPackage(TestModels.NS_URI)).isSameAs(libraryPackage);
+		assertThatThrownBy(() -> guard.requireAllowedPackage(TestModels.NS_URI + "/extra"))
+				.isInstanceOf(ToolException.class)
+				.hasMessageContaining("not allow-listed");
+	}
+
+	@Test
+	void aPrefixPatternListsAndReadsTheMatchingPackage() {
+		ModelGuard guard = new ModelGuard(registry, Set.of("http://example.org/*"),
+				Set.of(TestModels.NS_URI + "#//*"));
+
+		assertThat(guard.allowedPackages()).containsExactly(libraryPackage);
+		assertThat(guard.requireAllowedPackage(TestModels.NS_URI)).isSameAs(libraryPackage);
+		// and the package being readable is what makes its classes readable too
+		assertThat(guard.requireAllowedEClass(TestModels.BOOK).getName()).isEqualTo("Book");
+		assertThat(guard.allowedConcreteClasses(libraryPackage)).extracting(EClass::getName)
+				.contains("Book", "Library", "Writer");
+	}
+
+	@Test
+	void aPrefixPatternIsAnchoredOnTheWholeNamespace() {
+		EPackage lookalike = TestModels.libraryPackage();
+		lookalike.setNsURI("http://evil.example/http://example.org/library");
+		ModelGuard guard = new ModelGuard(TestModels.registryWith(libraryPackage, lookalike),
+				Set.of("http://example.org/*"), Set.of());
+
+		assertThat(guard.allowedPackages()).containsExactly(libraryPackage);
+		assertThatThrownBy(() -> guard.requireAllowedPackage(lookalike.getNsURI()))
+				.isInstanceOf(ToolException.class)
+				.hasMessageContaining("not allow-listed");
+	}
+
+	@Test
+	void bareWildcardExposesEveryRegisteredPackage() {
+		EPackage other = TestModels.annotatedPackage(libraryPackage);
+		ModelGuard guard = new ModelGuard(TestModels.registryWith(libraryPackage, other), Set.of("*"), Set.of("*"));
+
+		// sorted by nsURI: .../library before .../uplink
+		assertThat(guard.allowedPackages()).containsExactly(libraryPackage, other);
+		assertThat(guard.requireAllowedEClass(TestModels.BOOK).getName()).isEqualTo("Book");
+	}
+
+	@Test
+	void allowedPackagesStaysSortedByNamespaceUri() {
+		EPackage other = TestModels.annotatedPackage(libraryPackage);
+		ModelGuard guard = new ModelGuard(TestModels.registryWith(libraryPackage, other), Set.of("*"), Set.of());
+
+		assertThat(guard.allowedPackages()).extracting(EPackage::getNsURI).isSorted();
+	}
+
+	@Test
+	void aPatternThatMatchesNothingListsNothing() {
+		ModelGuard guard = new ModelGuard(registry, Set.of("http://nowhere.example/*"), Set.of("*"));
+
+		assertThat(guard.allowedPackages()).isEmpty();
+		assertThatThrownBy(() -> guard.requireAllowedPackage(TestModels.NS_URI))
+				.isInstanceOf(ToolException.class)
+				.hasMessageContaining("not allow-listed");
+	}
+
+	@Test
+	void aWidePackagePatternAloneExposesNoClass() {
+		// The two lists stay independent: this is the decision that keeps '*' on the
+		// package list from being an accidental instantiation grant.
+		ModelGuard guard = new ModelGuard(registry, Set.of("*"), Set.of());
+
+		assertThat(guard.allowedPackages()).containsExactly(libraryPackage);
+		assertThat(guard.allowedConcreteClasses(libraryPackage)).isEmpty();
+		assertThatThrownBy(() -> guard.requireAllowedEClass(TestModels.BOOK))
+				.isInstanceOf(ToolException.class)
+				.hasMessageContaining("not allow-listed");
+	}
+
+	@Test
+	void aClassPatternIsStillGatedOnItsPackage() {
+		ModelGuard guard = new ModelGuard(registry, Set.of(), Set.of("*"));
+
+		assertThatThrownBy(() -> guard.requireAllowedEClass(TestModels.BOOK))
+				.isInstanceOf(ToolException.class)
+				.hasMessageContaining("not allow-listed");
+		assertThat(guard.isClassAllowed((EClass) libraryPackage.getEClassifier("Book"))).isFalse();
+	}
+
+	@Test
+	void aPackageRegisteredAfterConfigurationIsListedAndReadable() {
+		// The model.atlas mirror case: nobody edits configuration when a scope
+		// publishes a package, so allowedPackages() has to filter the live registry.
+		EPackage.Registry live = TestModels.registryWith(libraryPackage);
+		ModelGuard guard = new ModelGuard(live, Set.of("http://example.org/*"), Set.of("http://example.org/*"));
+		assertThat(guard.allowedPackages()).containsExactly(libraryPackage);
+
+		EPackage late = TestModels.annotatedPackage(libraryPackage);
+		live.put(late.getNsURI(), late);
+
+		assertThat(guard.allowedPackages()).contains(late);
+		assertThat(guard.requireAllowedPackage(late.getNsURI())).isSameAs(late);
+	}
+
+	@Test
+	void anEmptyPackageListDeniesEverythingEvenWithAWideClassList() {
+		ModelGuard guard = new ModelGuard(registry, Set.of(), Set.of("*"));
+
+		assertThat(guard.allowedPackages()).isEmpty();
+	}
+
+	@Test
+	void exactEntriesAreListedEvenWhenTheRegistryDoesNotEnumerate() {
+		// A registry that delegates without overriding keySet() reports nothing of its
+		// delegate. Exact entries must survive that; only patterns may depend on
+		// enumeration.
+		EPackage.Registry blind = new EPackageRegistryImpl(TestModels.registryWith(libraryPackage));
+		ModelGuard guard = new ModelGuard(blind, Set.of(TestModels.NS_URI), Set.of(TestModels.BOOK));
+
+		assertThat(blind.keySet()).isEmpty();
+		assertThat(guard.allowedPackages()).containsExactly(libraryPackage);
+		assertThat(guard.requireAllowedEClass(TestModels.BOOK).getName()).isEqualTo("Book");
 	}
 }

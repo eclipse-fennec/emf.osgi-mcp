@@ -14,11 +14,13 @@
  */
 package org.eclipse.fennec.mcp.emf.tools.core;
 
+import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EEnumLiteral;
+import org.eclipse.emf.ecore.EModelElement;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EcoreFactory;
@@ -47,6 +49,12 @@ public final class TestModels {
 	public static final String BOOK = NS_URI + "#//Book";
 	public static final String WRITER = NS_URI + "#//Writer";
 	public static final String ABSTRACT_ITEM = NS_URI + "#//AbstractItem";
+
+	public static final String UPLINK_NS_URI = "http://example.org/uplink";
+	public static final String UPLINK_BASE = UPLINK_NS_URI + "#//UplinkBase";
+	public static final String UPLINK_A = UPLINK_NS_URI + "#//UplinkA";
+	public static final String TYPE_MAPPING_SOURCE = "http://eclipse.org/fennec/codec/typeMapping/uplink";
+	public static final String EXTENDED_META_DATA_SOURCE = "http:///org/eclipse/emf/ecore/util/ExtendedMetaData";
 
 	private TestModels() {
 	}
@@ -124,9 +132,53 @@ public final class TestModels {
 		return ePackage;
 	}
 
-	public static EPackage.Registry registryWith(EPackage ePackage) {
+	/**
+	 * A package that exercises everything {@code describe_eclass} cannot report:
+	 * EAnnotations in their exact spelling, an abstract class, and a supertype
+	 * that lives in another package.
+	 *
+	 * @param libraryPackage the package owning the foreign supertype
+	 * @return the uplink package
+	 */
+	public static EPackage annotatedPackage(EPackage libraryPackage) {
+		EcoreFactory factory = EcoreFactory.eINSTANCE;
+		EPackage ePackage = factory.createEPackage();
+		ePackage.setName("uplink");
+		ePackage.setNsPrefix("uplink");
+		ePackage.setNsURI(UPLINK_NS_URI);
+
+		EClass base = factory.createEClass();
+		base.setName("UplinkBase");
+		base.setAbstract(true);
+		annotate(base, TYPE_MAPPING_SOURCE, "typeDiscriminatorPath", "deviceInfo.deviceProfileName");
+		ePackage.getEClassifiers().add(base);
+
+		EClass uplinkA = factory.createEClass();
+		uplinkA.setName("UplinkA");
+		uplinkA.getESuperTypes().add(base);
+		// the foreign supertype: only a resolvable nsURI-based href can express this
+		uplinkA.getESuperTypes().add((EClass) libraryPackage.getEClassifier("AbstractItem"));
+		annotate(uplinkA, TYPE_MAPPING_SOURCE, "typeDiscriminator", "Sensor_A");
+		EAttribute battery = attribute(factory, "batteryVoltage", EcorePackage.eINSTANCE.getEDouble(), 0);
+		annotate(battery, EXTENDED_META_DATA_SOURCE, "name", "BatV");
+		uplinkA.getEStructuralFeatures().add(battery);
+		ePackage.getEClassifiers().add(uplinkA);
+
+		return ePackage;
+	}
+
+	private static void annotate(EModelElement element, String source, String key, String value) {
+		EAnnotation annotation = EcoreFactory.eINSTANCE.createEAnnotation();
+		annotation.setSource(source);
+		annotation.getDetails().put(key, value);
+		element.getEAnnotations().add(annotation);
+	}
+
+	public static EPackage.Registry registryWith(EPackage... ePackages) {
 		EPackage.Registry registry = new EPackageRegistryImpl();
-		registry.put(ePackage.getNsURI(), ePackage);
+		for (EPackage ePackage : ePackages) {
+			registry.put(ePackage.getNsURI(), ePackage);
+		}
 		return registry;
 	}
 

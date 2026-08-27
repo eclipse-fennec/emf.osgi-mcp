@@ -355,36 +355,20 @@ public class PackageRegistry {
 	public boolean isRegistrable(String nsUri) {
 		return nsUri != null && !nsUri.isBlank()
 				&& !RESERVED_NS_URIS.contains(nsUri)
-				&& matches(allowList, nsUri)
-				&& !matches(denyList, nsUri);
+				&& NsUriPatterns.matches(allowList, nsUri)
+				&& !NsUriPatterns.matches(denyList, nsUri);
 	}
 
 	private void requireRegistrable(String nsUri) {
 		if (RESERVED_NS_URIS.contains(nsUri)) {
 			throw new ToolException(String.format("Namespace '%s' is a reserved platform package and cannot be registered", nsUri));
 		}
-		if (!matches(allowList, nsUri)) {
+		if (!NsUriPatterns.matches(allowList, nsUri)) {
 			throw new ToolException(String.format("Namespace '%s' is not allow-listed for registration. An admin must add it to the EMFPackageRegistry nsuri.allowlist.", nsUri));
 		}
-		if (matches(denyList, nsUri)) {
+		if (NsUriPatterns.matches(denyList, nsUri)) {
 			throw new ToolException(String.format("Namespace '%s' is deny-listed for registration", nsUri));
 		}
-	}
-
-	private static boolean matches(List<String> patterns, String nsUri) {
-		for (String pattern : patterns) {
-			if ("*".equals(pattern)) {
-				return true;
-			}
-			if (pattern.endsWith("*")) {
-				if (nsUri.startsWith(pattern.substring(0, pattern.length() - 1))) {
-					return true;
-				}
-			} else if (pattern.equals(nsUri)) {
-				return true;
-			}
-		}
-		return false;
 	}
 
 	private void evictLeastRecentlyModified(SessionPackages store) {
