@@ -192,3 +192,19 @@ net.time4j:time4j-base:5.9.4
 org.eclipse.fennec.util:org.eclipse.fennec.openapi.osgi:1.0.0-SNAPSHOT
 org.eclipse.fennec.util:org.eclipse.fennec.openapi.client:1.0.0-SNAPSHOT
 org.eclipse.fennec.util:org.eclipse.fennec.openapi.ecore:1.0.0-SNAPSHOT
+
+# model.atlas is *published to* over plain HTTP through Fennec's RESTful URI handler
+# (org.eclipse.fennec.mcp.model.atlas.tools) - that path needs no client bundle.
+#
+# These four are for the opposite direction: reading EPackages *from* an atlas scope so
+# the tools can see models the runtime does not carry itself. Only the optional
+# org.eclipse.fennec.mcp.emf.runtime.config.atlas overlay activates them; a runtime
+# without it never touches the atlas and needs none of this deployed. 'osgi' is the
+# bundle that publishes each fetched package as an EPackage + EPackageConfigurator
+# service; it pulls 'api'/'impl' for the REST client and 'scope.api' for the scope model.
+# Note it also needs a JAX-RS ClientBuilder *service* (the whiteboard), not the
+# ClientBuilder.newBuilder() SPI lookup.
+org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.scope.api:0.1.0-SNAPSHOT
+org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.rest.client.api:0.1.0-SNAPSHOT
+org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.rest.client.impl:0.1.0-SNAPSHOT
+org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.rest.client.osgi:0.1.0-SNAPSHOT

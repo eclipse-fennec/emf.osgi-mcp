@@ -1,0 +1,22 @@
+{
+	":configurator:resource-version": 1,
+
+	"org.eclipse.fennec.model.atlas.rest.client~jena": {
+		"base.uri": "http://localhost:8080/atlas/rest",
+
+		"mode": "EAGER",
+		"eager.scopes": [
+			"jena"
+		],
+		"scope.allow.list": [
+			"jena"
+		],
+		"default.scope": "jena",
+
+		"mode.strict": false,
+		"force.remote": false,
+		"drift.check.interval.ms:int": 300000,
+
+		"auth.type": "NONE"
+	}
+}
