@@ -24,12 +24,17 @@ import io.modelcontextprotocol.server.McpServerFeatures;
  * Top-level MCP server interface exposing tools, prompts, and resources
  * to MCP clients. Implementations collect these specifications from
  * whiteboard-registered providers and serve them over a transport (e.g. HTTP).
+ * <p>
+ * Extends {@link MCPEndpoint}: a hosted server is also an addressable one, and
+ * inherits {@code getServerName()} / {@code getServerFullUrl()} from it. A
+ * consumer that only needs to <em>address</em> a server should bind to
+ * {@code MCPEndpoint} instead, so a remote server satisfies it too.
  *
  * @author ilenia
  * @since 1.0
  */
 @ProviderType
-public interface MCPServer {
+public interface MCPServer extends MCPEndpoint {
 
 	/**
 	 * Returns all tool specifications aggregated from registered {@link MCPToolProvider} services.
@@ -48,15 +53,5 @@ public interface MCPServer {
 	 * @return list of async resource specifications, never {@code null}
 	 */
 	List<McpServerFeatures.AsyncResourceSpecification> getResources();
-
-	/**
-	 * @return the human-readable server name used for MCP server identification
-	 */
-	String getServerName();
-
-	/**
-	 * @return the complete URL at which this MCP server is reachable by clients
-	 */
-	String getServerFullUrl();
 
 }
