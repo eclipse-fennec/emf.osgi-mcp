@@ -283,6 +283,46 @@ Further PIDs are documented where their feature lives: `JwtTokenVerifier` in
 | `toolProviders.target` | String | no | — | LDAP filter selecting `MCPToolProvider` services |
 | `toolProviders.cardinality.minimum` | int | no | `1` | Minimum number of tool providers before the server activates |
 
+#### RemoteMCPEndpoint
+
+An MCP server this framework does **not** host, published so a client here can
+address it. Factory PID `RemoteMCPEndpoint` (tilde notation):
+
+```json
+"RemoteMCPEndpoint~partner": {
+    "server.name": "partner-emf-mcp-server",
+    "server.url": "https://mcp.example.org/mcp/emf"
+}
+```
+
+| Property | Type | Required | What it is |
+|---|---|---|---|
+| `server.name` | String | yes | Server identity, and the property clients filter on |
+| `server.url` | String | yes | Complete URL at which the remote server is reachable |
+
+Configuration is the whole implementation: no transport, no servlet, no tool
+aggregation, and **no connection attempt at activation**. An endpoint asserts an
+address, it does not verify one — failing activation because a remote host was
+down at startup would make the wiring less useful, not safer.
+
+#### `MCPEndpoint` vs. `MCPServer`
+
+`MCPServer` extends `MCPEndpoint`, which carries just `getServerName()` and
+`getServerFullUrl()`.
+
+- **Bind to `MCPServer`** when you need what the server *serves* — the aggregated
+  tool, prompt and resource specifications. Only a hosted server can answer that.
+- **Bind to `MCPEndpoint`** when you only need to *reach* a server. Both
+  `HttpMCPServerComponent` (which registers both types from one component, with
+  unchanged service properties) and `RemoteMCPEndpoint` satisfy it, so the
+  consumer is indifferent to which it got — and a client pointed at another host
+  no longer needs a local server deployment to satisfy its reference.
+
+`RemoteMCPEndpoint` is deliberately *not* an `MCPServer`: it cannot enumerate the
+remote server's tools, and claiming that interface would mean returning empty
+lists that read as "this server has no tools" rather than "ask the server
+yourself".
+
 ### Deploying Behind a Reverse Proxy (SSE)
 
 The HTTP transport is **Streamable HTTP**: responses to the MCP endpoint are served as a
@@ -391,6 +431,47 @@ Nothing is visible or instantiable unless explicitly allow-listed on the admin-o
 ```
 
 A class is usable only if its package **and** the class itself are listed. Allow-listing a package is a code-trust decision: its generated `EFactory` runs in-process.
+
+#### Patterns
+
+Both lists accept an exact entry, a **`prefix*`**, or a bare **`*`** — the same
+pattern language as `EMFPackageRegistry`'s `nsuri.allowlist`. Prefix matching is
+anchored on the whole string, so a rule for `http://example.org/` is not
+satisfied by `http://evil.example/http://example.org/x`. A blank entry is
+ignored rather than treated as a wildcard.
+
+```json
+"EMFModelGuard": {
+    "epackage.allowlist": ["http://example.org/*"],
+    "eclass.allowlist": ["http://example.org/library#//*"]
+}
+```
+
+Two things patterns do **not** change:
+
+- **The lists stay independent.** A package pattern says what may be *seen*,
+  never what may be *instantiated*. `"epackage.allowlist": ["*"]` with an empty
+  `eclass.allowlist` exposes every package and not one class.
+- **Empty still means deny-all**, on either list.
+
+Patterns exist because the registry is not always fully known when the
+configuration is written. `allowedPackages()` therefore **filters the live
+registry** rather than resolving the allow-list's entries, so a package that
+arrives after startup — mirrored from a model.atlas scope, say — is listed and
+readable without anyone editing configuration to name it. Before this, the
+metadata discovery tools could find such a package while `list_metamodel` and
+`describe_eclass` could not read it.
+
+Two consequences worth knowing:
+
+- Enumeration is only as complete as the registry's `keySet()`. The literal
+  entries of the allow-list are always resolved directly as well, so exact
+  configurations cannot regress; only `prefix*` and `*` depend on the registry
+  being enumerable.
+- With a wide pattern, `list_metamodel` resolves every matching entry, which
+  initializes each package's generated code. On a large registry that cost lands
+  on the first call. Prefer the narrowest prefix that covers what the agent
+  actually needs.
 
 ### Tool overview
 
