@@ -1,0 +1,34 @@
+Bundle-Name: Eclipse Fennec Metadata MCP Tools
+Bundle-Description: MCP tools to read metadata info out of the MetadataService for the registered EPackages
+-workingset: emf
+
+-library: enableEMF
+
+-buildpath: \
+	io.modelcontextprotocol.sdk.mcp-core;version=latest,\
+	io.projectreactor.reactor-core;version=latest,\
+	reactive-streams;version=latest,\
+	tools.jackson.core.jackson-databind;version=latest,\
+	tools.jackson.core.jackson-core;version=latest,\
+	com.fasterxml.jackson.core.jackson-annotations;version=latest,\
+	org.eclipse.fennec.emf.osgi.metadata;version=latest,\
+	org.eclipse.fennec.mcp.api;version=snapshot
+
+# org.eclipse.fennec.mcp.emf.tools declares the metadata bridge
+# 'resolution:=optional' because its tools still work without it. Here the
+# import is deliberately left mandatory (the bnd default): this bundle is
+# nothing but a view onto the metadata layer, so a runtime without it should
+# fail to resolve rather than start nine tools that can never answer.
+
+# Both extra entries are test-only; nothing in src/ refers to them.
+# - codec.metadata carries CodecAspectProvider, the one real MetadataHandler
+#   available to prove that the generic aspect tools render a
+#   provider-contributed aspect.
+# - component.minimal exports org.eclipse.fennec.emf.osgi.fingerprint.util,
+#   whose FingerprintHelper backs MetadataServices.createWhiteboard(). Model
+#   identity in the metadata layer is a fingerprint, so a stub here would make
+#   the fixture lie about how packages are keyed.
+-testpath: \
+	assertj-core,\
+	org.eclipse.fennec.codec.metadata;version=latest,\
+	org.eclipse.fennec.emf.osgi.component.minimal;version=latest
