@@ -12,18 +12,18 @@
  *   Data In Motion Consulting - initial implementation
  * ******************************************************************
  */
-package org.eclipse.fennec.mcp.api;
+package org.eclipse.fennec.mcp.endpoint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.lang.annotation.Annotation;
 
-import org.eclipse.fennec.mcp.api.MCPServer;
 import org.junit.jupiter.api.Test;
 
 /**
- * The endpoint/server split: a remote MCP server is addressable without anything
- * being hosted here, and a hosted server is still addressable the same way.
+ * The endpoint half of the endpoint/server split: a remote MCP server is
+ * addressable without anything being hosted here, and without the MCP SDK on
+ * the class path.
  *
  * @author ilenia
  * @since Aug 27, 2026
@@ -55,21 +55,15 @@ class RemoteMCPEndpointTest {
 	}
 
 	@Test
-	void aHostedServerIsAlsoAnEndpoint() {
-		// The split has to be source-compatible for everything already binding to
-		// MCPServer, which is exactly this relation.
-		assertThat(MCPEndpoint.class).isAssignableFrom(MCPServer.class);
-	}
-
-	@Test
 	void anEndpointNeedsNoServerToBeReachable() {
-		// The point of the split: nothing here implements MCPServer, so a client can
-		// be satisfied without a local HttpMCPServerComponent deployment.
+		// The point of the split: this bundle cannot even see MCPServer, so a client
+		// is satisfied without a local HttpMCPServerComponent deployment. That
+		// MCPServer is still an MCPEndpoint is asserted up in mcp.api, the only layer
+		// that can see both.
 		RemoteMCPEndpoint endpoint = new RemoteMCPEndpoint();
 		endpoint.activate(config(NAME, URL));
 
 		assertThat(endpoint).isInstanceOf(MCPEndpoint.class);
-		assertThat(endpoint).isNotInstanceOf(MCPServer.class);
 	}
 
 	@Test

@@ -9,6 +9,7 @@ Bundle-Description: Component that uses the OSGi Http Whiteboard to publish MCP 
 	io.modelcontextprotocol.sdk.mcp-core;version=latest,\
 	io.modelcontextprotocol.sdk.mcp-json-jackson3;version=latest,\
 	org.eclipse.fennec.mcp.api;version=snapshot,\
+	org.eclipse.fennec.mcp.endpoint;version=snapshot,\
 
 Import-Package: \
 	jakarta.servlet;version="[6.0,7)",\
