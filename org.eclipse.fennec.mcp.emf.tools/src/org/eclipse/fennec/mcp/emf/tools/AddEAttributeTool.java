@@ -18,7 +18,6 @@ import java.util.Map;
 
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
-import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.fennec.mcp.api.MCPTool;
 import org.eclipse.fennec.mcp.emf.tools.core.Dataset;
 import org.eclipse.fennec.mcp.emf.tools.core.DatasetRegistry;
@@ -62,7 +61,7 @@ public class AddEAttributeTool extends AbstractEMFTool {
 						"datasetId": { "type": "string" },
 						"classObjectId": { "type": "string" },
 						"name": { "type": "string" },
-						"eType": { "type": "string", "description": "datatype ref <nsURI>#//<Name> or dataset objectId (or use eGenericType)" },
+						"eType": { "type": "string", "description": "datatype ref <nsURI>#//<Name>, '#//<Name>' for a sibling classifier of the owner's package, or a dataset objectId (or use eGenericType)" },
 						"eGenericType": { "type": "object", "description": "generic type spec; alternative to eType" },
 						"lowerBound": { "type": "integer", "description": "default 0" },
 						"upperBound": { "type": "integer", "description": "default 1; -1 = unbounded" },
@@ -87,15 +86,7 @@ public class AddEAttributeTool extends AbstractEMFTool {
 			String sessionId = sessionId(exchange);
 			Dataset dataset = registry.require(sessionId, requireString(arguments, "datasetId"));
 			EClass owner = EcoreAuthoring.requireEClass(dataset, requireString(arguments, "classObjectId"));
-			EAttribute attribute = EcoreFactory.eINSTANCE.createEAttribute();
-			attribute.setName(requireString(arguments, "name"));
-			EcoreAuthoring.applyType(attribute, optionalString(arguments, "eType"), arguments.get("eGenericType"), true, dataset, guard.resolverFor(sessionId));
-			EcoreAuthoring.applyFlags(attribute, featureFlags(arguments));
-			attribute.setID(optionalBoolean(arguments, "iD", false));
-			String defaultValueLiteral = optionalString(arguments, "defaultValueLiteral");
-			if (defaultValueLiteral != null) {
-				attribute.setDefaultValueLiteral(defaultValueLiteral);
-			}
+			EAttribute attribute = NestedAuthoring.buildEAttribute(dataset, arguments, NestedAuthoring.localTo(guard.resolverFor(sessionId), owner));
 			owner.getEStructuralFeatures().add(attribute);
 			String objectId = EcoreAuthoring.put(dataset, attribute, registry.limits());
 			return Map.of("objectId", objectId, "name", attribute.getName(), "objectCount", dataset.objectCount());
