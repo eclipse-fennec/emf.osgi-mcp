@@ -79,6 +79,7 @@ class AuthoringFlowTest {
 		createDataset.activate();
 		createEPackage = new CreateEPackageTool();
 		createEPackage.registry = registry;
+		createEPackage.guard = guard;
 		createEPackage.activate();
 		addEClass = new AddEClassTool();
 		addEClass.registry = registry;

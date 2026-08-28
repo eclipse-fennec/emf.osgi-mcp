@@ -18,12 +18,10 @@ import java.util.Map;
 
 import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EModelElement;
-import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.fennec.mcp.api.MCPTool;
 import org.eclipse.fennec.mcp.emf.tools.core.Dataset;
 import org.eclipse.fennec.mcp.emf.tools.core.DatasetRegistry;
 import org.eclipse.fennec.mcp.emf.tools.core.EcoreAuthoring;
-import org.eclipse.fennec.mcp.emf.tools.core.ToolException;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
@@ -72,20 +70,7 @@ public class AddEAnnotationTool extends AbstractEMFTool {
 		return run(() -> {
 			Dataset dataset = registry.require(sessionId(exchange), requireString(arguments, "datasetId"));
 			EModelElement target = EcoreAuthoring.requireEModelElement(dataset, requireString(arguments, "targetObjectId"));
-			EAnnotation annotation = EcoreFactory.eINSTANCE.createEAnnotation();
-			annotation.setSource(requireString(arguments, "source"));
-			Object details = arguments.get("details");
-			if (details != null) {
-				if (!(details instanceof Map<?, ?> detailMap)) {
-					throw new ToolException("Parameter 'details' must be an object of string key/value pairs");
-				}
-				for (Map.Entry<?, ?> entry : detailMap.entrySet()) {
-					annotation.getDetails().put(String.valueOf(entry.getKey()), entry.getValue() == null ? null : String.valueOf(entry.getValue()));
-				}
-			}
-			for (String refId : optionalStringList(arguments, "references")) {
-				annotation.getReferences().add(dataset.requireObject(refId));
-			}
+			EAnnotation annotation = NestedAuthoring.buildEAnnotation(dataset, arguments);
 			target.getEAnnotations().add(annotation);
 			String objectId = EcoreAuthoring.put(dataset, annotation, registry.limits());
 			return Map.of("objectId", objectId, "source", annotation.getSource(), "objectCount", dataset.objectCount());

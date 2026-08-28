@@ -17,15 +17,12 @@ package org.eclipse.fennec.mcp.emf.tools;
 import java.util.Map;
 
 import org.eclipse.emf.ecore.EClass;
-import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EReference;
-import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.fennec.mcp.api.MCPTool;
 import org.eclipse.fennec.mcp.emf.tools.core.Dataset;
 import org.eclipse.fennec.mcp.emf.tools.core.DatasetRegistry;
 import org.eclipse.fennec.mcp.emf.tools.core.EcoreAuthoring;
 import org.eclipse.fennec.mcp.emf.tools.core.ModelGuard;
-import org.eclipse.fennec.mcp.emf.tools.core.ToolException;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
@@ -63,7 +60,7 @@ public class AddEReferenceTool extends AbstractEMFTool {
 						"datasetId": { "type": "string" },
 						"classObjectId": { "type": "string" },
 						"name": { "type": "string" },
-						"eType": { "type": "string", "description": "class ref <nsURI>#//<Name> or dataset objectId (or use eGenericType)" },
+						"eType": { "type": "string", "description": "class ref <nsURI>#//<Name>, '#//<Name>' for a sibling classifier of the owner's package, or a dataset objectId (or use eGenericType)" },
 						"eGenericType": { "type": "object", "description": "generic type spec; alternative to eType" },
 						"containment": { "type": "boolean", "description": "default false" },
 						"resolveProxies": { "type": "boolean", "description": "default true" },
@@ -90,27 +87,7 @@ public class AddEReferenceTool extends AbstractEMFTool {
 			String sessionId = sessionId(exchange);
 			Dataset dataset = registry.require(sessionId, requireString(arguments, "datasetId"));
 			EClass owner = EcoreAuthoring.requireEClass(dataset, requireString(arguments, "classObjectId"));
-			EReference reference = EcoreFactory.eINSTANCE.createEReference();
-			reference.setName(requireString(arguments, "name"));
-			EcoreAuthoring.applyType(reference, optionalString(arguments, "eType"), arguments.get("eGenericType"), true, dataset, guard.resolverFor(sessionId));
-			EcoreAuthoring.applyFlags(reference, featureFlags(arguments));
-			reference.setContainment(optionalBoolean(arguments, "containment", false));
-			reference.setResolveProxies(optionalBoolean(arguments, "resolveProxies", true));
-			String oppositeId = optionalString(arguments, "eOpposite");
-			if (oppositeId != null) {
-				EObject opposite = dataset.requireObject(oppositeId);
-				if (!(opposite instanceof EReference oppositeRef)) {
-					throw new ToolException(String.format("eOpposite '%s' is a %s, not an EReference", oppositeId, opposite.eClass().getName()));
-				}
-				reference.setEOpposite(oppositeRef);
-			}
-			for (String keyId : optionalStringList(arguments, "eKeys")) {
-				EObject key = dataset.requireObject(keyId);
-				if (!(key instanceof org.eclipse.emf.ecore.EAttribute keyAttr)) {
-					throw new ToolException(String.format("eKey '%s' is a %s, not an EAttribute", keyId, key.eClass().getName()));
-				}
-				reference.getEKeys().add(keyAttr);
-			}
+			EReference reference = NestedAuthoring.buildEReference(dataset, arguments, NestedAuthoring.localTo(guard.resolverFor(sessionId), owner));
 			owner.getEStructuralFeatures().add(reference);
 			String objectId = EcoreAuthoring.put(dataset, reference, registry.limits());
 			return Map.of("objectId", objectId, "name", reference.getName(), "objectCount", dataset.objectCount());

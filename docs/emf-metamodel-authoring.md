@@ -24,8 +24,10 @@
 | (existing, now session-aware) | `create_instance`, `create_from_json`, `modify_feature`, `list_metamodel`, `describe_eclass`, … |
 
 Type references are `<nsURI>#//<Name>` (built-in Ecore datatypes such as
-`http://www.eclipse.org/emf/2002/Ecore#//EString`, or a registered package) or a
-dataset-local `objectId` of a classifier authored in the same dataset. Generics
+`http://www.eclipse.org/emf/2002/Ecore#//EString`, or a registered package),
+`#//<Name>` for a sibling classifier of the package being authored (which no
+registry can resolve while that package is unregistered), or a dataset-local
+`objectId` of a classifier authored in the same dataset. Generics
 use a recursive `GenericType` shape (`classifier` | `typeParameter` |
 `typeArguments` | `upperBound` | `lowerBound`) via `eGenericType` /
 `eGenericSuperTypes` / `eGenericExceptions`.
@@ -76,12 +78,63 @@ tool. It is the "read narrow to copy" half of the division of labour with
 [`org.eclipse.fennec.mcp.metadata.tools`](metadata-discovery-tools.md), which
 queries wide to *locate* a model.
 
+### Composite authoring: the whole package in one call
+
+An agent pays an iteration per tool call, and the authoring tools chain on ids:
+`datasetId` → `packageObjectId` → `classObjectId` → features. A two-class
+package cost nine iterations that way, eight of them spent waiting for an id
+rather than doing work. So `create_epackage` and `add_eclass` take their
+children inline:
+
+| Tool | Nested arrays |
+|------|---------------|
+| `create_epackage` | `eClassifiers` — each entry an `eClass` of `EClass` (default), `EEnum` or `EDataType`, otherwise the arguments of `add_eclass` / `add_eenum` / `add_edatatype` minus `datasetId`/`packageObjectId` |
+| `add_eclass` (standalone, and each `EClass` entry above) | `eAttributes`, `eReferences`, `eAnnotations` — the arguments of `add_eattribute` / `add_ereference` / `add_eannotation` minus `datasetId` and the owner id |
+| `EEnum` entry | `eLiterals` — the arguments of `add_eenum_literal` minus `datasetId`/`eenumObjectId` |
+
+```json
+{
+  "datasetId": "ds1", "name": "draginolse01",
+  "nsURI": "https://example.org/dragino/lse01", "nsPrefix": "lse01",
+  "eClassifiers": [
+    { "name": "Uplink",
+      "eSuperTypes": ["https://eclipse.org/fennec/lorawan#//UplinkMessage"],
+      "eAnnotations": [ { "source": "https://…/discriminator", "details": { "port": "85" } } ],
+      "eAttributes": [ { "name": "batV", "eType": "…Ecore#//EDouble" } ],
+      "eReferences": [ { "name": "object", "eType": "#//DecodedObject", "containment": true } ] },
+    { "name": "DecodedObject", "eAttributes": [ … ] }
+  ]
+}
+```
+
+Four properties make this safe to rely on:
+
+- **Order-independent.** Classifiers are all created and attached first, then
+  their type references are wired in a second pass, so `Uplink` may point at
+  `DecodedObject` before `DecodedObject` is declared.
+- **All-or-nothing.** Nothing is registered in the dataset until the whole tree
+  is built. A failure part-way leaves the dataset exactly as it was — correct
+  the payload and call again; there is no half-built package to clean up.
+- **Located errors.** A nested failure names the element by array index and
+  name: `eClassifiers[1] 'Uplink': eAttributes[0] 'batV': …`.
+- **Addressable results.** The call returns `created`, every nested element as
+  `objectId` / `type` / `name`, so a follow-up `modify_feature` needs no
+  `inspect_dataset` first.
+
+Omitting the arrays leaves both tools behaving exactly as before, and the
+standalone `add_eattribute` / `add_ereference` / `add_eannotation` remain the
+way to extend a package that already exists. `eOpposite` and `eKeys` take
+dataset objectIds, so an opposite pair spanning one composite call is closed
+afterwards with `modify_feature`. Nested `eOperations` are not supported.
+
 ### End-to-end walkthrough
 
 1. `create_dataset` → a metamodel dataset.
-2. `create_epackage` (name / nsURI / nsPrefix) → `packageObjectId`.
-3. `add_eclass`, `add_eattribute` (`eType=…Ecore#//EString`), `add_ereference`
-   (`eType` = a dataset objectId or `#//` ref), … build the model.
+2. `create_epackage` (name / nsURI / nsPrefix) with the package's
+   `eClassifiers` inline → `packageObjectId` plus the `created` ids.
+3. Only if the model grows afterwards: `add_eclass` (itself composite),
+   `add_eattribute` (`eType=…Ecore#//EString`), `add_ereference` (`eType` = a
+   dataset objectId or a `#//` ref), …
 4. `register_package` → validates (`Diagnostician`), enforces dynamic-only and
    the nsURI policy, registers a frozen copy; the classes are now instantiable.
 5. `export_dataset` (`format=xmi`) → the `.ecore` of the dataset, or
@@ -262,6 +315,7 @@ Status: 🔴 TODO · 🟡 IN PROGRESS · 🟢 DONE
 | 🔴 | P1 | **GenModel emission** | `format=genmodel` / `GenerateGenModelTool`: build GenModel/GenPackage, two-resource XMI save, convention defaults (complianceLevel, oSGiCompatible, basePackage, header) | — (backlog; new dep `org.eclipse.emf.codegen.ecore`) |
 | 🟢 | P1 | **Ecore authoring guide + sample config** | This document (§0) + the `EMFPackageRegistry` sample config and end-to-end walkthrough | M7 (#12) |
 | 🟢 | P2 | **Ergonomic authoring tools** | `create_epackage` / `add_eclass` / `add_edatatype` / `add_eenum(+literal)` / `add_eattribute` / `add_ereference` / `add_eoperation(+parameter)` / `add_eannotation` / `add_etypeparameter` + full generics | M4 (#9), M5 (#10) |
+| 🟢 | P1 | **Composite authoring tools** | `create_epackage` takes nested `eClassifiers`, `add_eclass` nested `eAttributes`/`eReferences`/`eAnnotations`; two-pass wiring for order-independent intra-package refs, all-or-nothing against the dataset, located errors, `created` ids in the result | #32 |
 | 🟢 | P2 | **Round-trip: load existing .ecore** | `import_ecore` / `import_instances` on a hardened, registry-only loader (no href deref, no DOCTYPE, size-capped, unresolved-proxy reject) | M6 (#11) |
 
 Beyond the original sketch, v1 also added a **session-local `PackageRegistry`**
