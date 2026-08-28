@@ -8,11 +8,13 @@
 	"EMFModelGuard": {
 		"epackage.allowlist": [
 			"https://eclipse.org/fennec/lorawan*",
-			"http://www.example.org/lorawan/specific/em310udl*"
+			"http://www.example.org/lorawan/specific/em310udl*",
+			"https://fennec.eclipse.org/event.atlas/inferred*"
 		],
 		"eclass.allowlist": [
 			"https://eclipse.org/fennec/lorawan*",
-			"http://www.example.org/lorawan/specific/em310udl*"
+			"http://www.example.org/lorawan/specific/em310udl*",
+			"https://fennec.eclipse.org/event.atlas/inferred*"
 		]
 	},
 	"EMFPackageRegistry": {
@@ -20,7 +22,8 @@
 			"http://www.eclipse.org/emf/2002/Ecore",
 			"https://eclipse.org/fennec/lorawan",
 			"http://www.example.org/lorawan/specific/em310udl",
-			"https://eclipse.org/fennec/lorawan/*"
+			"https://eclipse.org/fennec/lorawan/*",
+			"https://fennec.eclipse.org/event.atlas/inferred*"
 		],
 		"nsuri.denylist": [],
 		"max.models:int": 100
@@ -43,7 +46,8 @@
 		"stage": "draft",
 		"overwrite": false,
 		"publish.nsuri.allowlist": [
-			"https://eclipse.org/fennec/lorawan/*"
+			"https://eclipse.org/fennec/lorawan/*",
+			"https://fennec.eclipse.org/event.atlas/inferred*"
 		]
 	},
 	"MCPToolProvider~modelAtlas": {
