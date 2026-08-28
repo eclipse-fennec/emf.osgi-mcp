@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.mcp.api;
 
+import org.eclipse.fennec.mcp.endpoint.MCPEndpoint;
 import java.util.List;
 
 import org.osgi.annotation.versioning.ProviderType;

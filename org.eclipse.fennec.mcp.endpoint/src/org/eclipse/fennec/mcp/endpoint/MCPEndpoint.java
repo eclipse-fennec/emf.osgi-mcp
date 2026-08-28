@@ -12,7 +12,7 @@
  *   Data In Motion Consulting - initial implementation
  * ******************************************************************
  */
-package org.eclipse.fennec.mcp.api;
+package org.eclipse.fennec.mcp.endpoint;
 
 import org.osgi.annotation.versioning.ProviderType;
 

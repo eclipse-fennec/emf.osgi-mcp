@@ -1,0 +1,13 @@
+Bundle-Name: Eclipse Fennec OSGi MCP Endpoint
+Bundle-Description: The client half of the MCP whiteboard: an addressable MCP server \
+ (name + URL) and a configuration-only publisher for one hosted elsewhere. Depends on \
+ OSGi alone — a consumer that only has to reach an MCP server never deploys the MCP SDK.
+
+-workingset: mcp
+
+-buildpath: \
+	org.osgi.annotation.versioning;version=latest,\
+	org.osgi.service.component.annotations;version=latest,\
+	org.osgi.service.metatype.annotations;version=latest
+
+-testpath: assertj-core

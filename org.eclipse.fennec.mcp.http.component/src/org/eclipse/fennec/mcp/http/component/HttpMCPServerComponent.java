@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.mcp.http.component;
 
+import org.eclipse.fennec.mcp.endpoint.MCPEndpoint;
 import java.util.Collections;
 import java.util.Dictionary;
 import java.util.Hashtable;
@@ -21,7 +22,6 @@ import java.util.List;
 
 import org.eclipse.fennec.emf.osgi.annotation.require.RequireEMF;
 import org.eclipse.fennec.mcp.api.AbstractHttpMCPServer;
-import org.eclipse.fennec.mcp.api.MCPEndpoint;
 import org.eclipse.fennec.mcp.api.MCPServer;
 import org.eclipse.fennec.mcp.api.MCPServerConstants;
 import org.eclipse.fennec.mcp.api.MCPToolProvider;

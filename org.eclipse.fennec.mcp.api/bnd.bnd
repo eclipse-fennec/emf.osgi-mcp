@@ -4,6 +4,7 @@ Bundle-Description: Whiteboard API for MCP Tools using io.contextprotocol
 -library: enableEMF
 
 -buildpath: \
+	org.eclipse.fennec.mcp.endpoint;version=snapshot,\
 	org.osgi.framework;version=latest,\
 	org.osgi.service.component.annotations;version=latest,\
 	org.osgi.service.metatype.annotations;version=latest,\

@@ -15,6 +15,7 @@
 	osgi.implementation;filter:='(osgi.implementation=mcp.emf)',\
 	bnd.identity;id='slf4j.simple',\
 	bnd.identity;id='org.eclipse.fennec.mcp.emf.runtime',\
+	bnd.identity;id='org.eclipse.fennec.mcp.endpoint',\
 	bnd.identity;id='org.eclipse.fennec.mcp.emf.runtime.config',\
 	bnd.identity;id='org.eclipse.fennec.mcp.emf.tools',\
 	bnd.identity;id='org.eclipse.fennec.mcp.metadata.tools',\
@@ -60,6 +61,7 @@
 	org.eclipse.fennec.emf.osgi.metadata;version='[1.1.0,1.1.1)',\
 	org.eclipse.fennec.mcp.api;version=snapshot,\
 	org.eclipse.fennec.mcp.emf.runtime;version=snapshot,\
+	org.eclipse.fennec.mcp.endpoint;version=snapshot,\
 	org.eclipse.fennec.mcp.emf.runtime.config;version=snapshot,\
 	org.eclipse.fennec.mcp.emf.tools;version=snapshot,\
 	org.eclipse.fennec.mcp.http.component;version=snapshot,\
