@@ -1,3 +1,13 @@
+# Optional: local credentials for the MCP endpoints, as system properties. The leading '-'
+# means "ignore if absent", so a checkout without the file - CI, or anyone running only on
+# loopback - resolves and launches exactly as before. See secrets.bndrun.template.
+-include: -secrets.bndrun
+
+# configs/configuration.json carries $[env:...] / $[prop:...] placeholders for auth.token;
+# this plugin resolves them as Configuration Admin delivers the configuration.
+-runproperties: \
+	felix.cm.config.plugins=org.apache.felix.configadmin.plugin.interpolation
+
 -runfw: org.apache.felix.framework;version='[7.0.5,7.0.5]'
 -runee: JavaSE-21
 
@@ -13,6 +23,7 @@
 	bnd.identity;id='org.eclipse.osgitech.rest',\
 	bnd.identity;id='org.eclipse.fennec.mcp.emf.runtime.config.atlas',\
 	bnd.identity;id='org.eclipse.fennec.codec',\
+	bnd.identity;id='org.apache.felix.configadmin.plugin.interpolation',\
 	bnd.identity;id='org.apache.felix.gogo.command',\
 	bnd.identity;id='org.apache.felix.gogo.shell'
 
@@ -31,6 +42,7 @@
 	org.apache.commons.commons-io;version='[2.22.0,2.22.1)',\
 	org.apache.felix.cm.json;version='[2.0.0,2.0.1)',\
 	org.apache.felix.configadmin;version='[1.9.26,1.9.27)',\
+	org.apache.felix.configadmin.plugin.interpolation;version='[1.2.8,1.2.9)',\
 	org.apache.felix.configurator;version='[1.0.18,1.0.19)',\
 	org.apache.felix.gogo.command;version='[1.1.2,1.1.3)',\
 	org.apache.felix.gogo.runtime;version='[1.1.6,1.1.7)',\
