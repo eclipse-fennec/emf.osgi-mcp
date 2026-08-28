@@ -15,7 +15,6 @@
 	osgi.implementation;filter:='(osgi.implementation=mcp.emf)',\
 	bnd.identity;id='slf4j.simple',\
 	bnd.identity;id='org.eclipse.fennec.mcp.emf.runtime',\
-	bnd.identity;id='org.eclipse.fennec.mcp.endpoint',\
 	bnd.identity;id='org.eclipse.fennec.mcp.emf.runtime.config',\
 	bnd.identity;id='org.eclipse.fennec.mcp.emf.tools',\
 	bnd.identity;id='org.eclipse.fennec.mcp.metadata.tools',\
