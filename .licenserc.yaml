@@ -25,6 +25,7 @@ header:
     - '**/*.sh'
     - '**/*.bnd'
     - '**/*.bndrun'
+    - '**/*.bndrun.template'
     - '**/*.xml'
     - '**/*.csv'
     - '**/*.json'
