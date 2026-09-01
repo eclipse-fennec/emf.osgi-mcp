@@ -1,0 +1,15 @@
+-resourceonly: true
+-includeresource: OSGI-INF/configurator/=configs/
+Bundle-Name: Eclipse Fennec Inference MCP Runtime Configuration
+Bundle-Description: Configurator JSON for the metamodel-inference feature: the task-scoped MCPToolProvider~inference, \
+ and the /mcp/inference server with its own auth.token. The ModelAtlasPublisher config is NOT here: that PID is \
+ owned by org.eclipse.fennec.model.atlas.mcp.config, and a second config for the same factory PID would activate \
+ a second publisher. \
+ Deployed together with org.eclipse.fennec.mcp.inference.runtime; the base EMF runtime carries none of it. \
+ Note that EMFModelGuard and EMFPackageRegistry are singleton PIDs owned by emf.runtime.config - the namespaces an \
+ inference run authors under have to be allow-listed there, they cannot be contributed from here.
+-workingset: emf
+
+Require-Capability: \
+	osgi.extender;filter:='(osgi.extender=osgi.configurator)',\
+	osgi.implementation;filter:='(&(osgi.implementation=osgi.cm)(version>=1.6.0)(!(version>=2.0.0)))'

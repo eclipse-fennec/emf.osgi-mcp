@@ -1,0 +1,26 @@
+{
+    ":configurator:resource-version": 1,
+    "MCPToolProvider~emfModel": {
+        "name": "emf_model_tool_provider",
+        "description": "Tools to author Ecore metamodels and to create, populate, validate and serialize EMF model instances (from allow-listed or session-registered EPackages)",
+        "tools.target": "(|(tool.name=list_metamodel)(tool.name=describe_eclass)(tool.name=create_dataset)(tool.name=inspect_dataset)(tool.name=manage_dataset)(tool.name=export_dataset)(tool.name=export_package)(tool.name=create_instance)(tool.name=modify_feature)(tool.name=delete_instance)(tool.name=create_from_json)(tool.name=replay_recipe)(tool.name=create_epackage)(tool.name=add_eclass)(tool.name=add_edatatype)(tool.name=add_eenum)(tool.name=add_eenum_literal)(tool.name=add_eattribute)(tool.name=add_ereference)(tool.name=add_eoperation)(tool.name=add_eparameter)(tool.name=add_eannotation)(tool.name=add_etypeparameter)(tool.name=register_package)(tool.name=unregister_package)(tool.name=list_registry)(tool.name=import_ecore)(tool.name=import_instances))",
+        "tools.cardinality.minimum:int": 28
+    },
+    "MCPToolProvider~emfMetadata": {
+        "name": "emf_metadata_tool_provider",
+        "description": "Discovery tools over the EMF metadata layer: locate a model by its EAnnotations, resolve a bare class name, and report what the metadata layer holds and how it is wired",
+        "tools.target": "(|(tool.name=list_annotation_sources)(tool.name=find_classes_by_annotation)(tool.name=find_features_by_annotation)(tool.name=find_operations_by_annotation)(tool.name=find_class_by_name)(tool.name=list_aspects)(tool.name=describe_aspects)(tool.name=describe_package_metadata)(tool.name=describe_metadata_status))",
+        "tools.cardinality.minimum:int": 9
+    },
+    "HttpMCPServerComponent~emfModel": {
+        "server.name": "osgi-emf-mcp-server",
+        "server.version": "1.0",
+        "osgi.http.whiteboard.servlet.pattern": "/mcp/emf",
+        "auth.token": "$[env:MCP_EMF_AUTH_TOKEN;default=$[prop:MCP_EMF_AUTH_TOKEN;default=]]",
+        "osgi.http.whiteboard.target": "(org.apache.felix.http.name=emf)",
+        "has.tool.capability": true,
+        "toolProviders.target": "(|(name=emf_model_tool_provider)(name=emf_metadata_tool_provider)(name=model_atlas_tool_provider))",
+        "toolProviders.cardinality.minimum:int": 2,
+        "server.instructions": "Use this MCP server to author Ecore metamodels and to build EMF model instances. DISCOVERY (start here when you were handed a payload and not told which model it belongs to): list_annotation_sources reveals the annotation vocabularies of this runtime, so you never have to guess a source URI; find_classes_by_annotation/find_features_by_annotation/find_operations_by_annotation then query across every registered package at once - OMIT 'value' to match any value for a key, which is how you locate a whole model family and check whether a discriminator value is still free; find_class_by_name resolves a bare class name to its <nsURI>#//<Name> reference; describe_aspects reads one element's parsed provider metadata (and its diagnostics); list_aspects and describe_metadata_status report what the metadata layer holds and how it is wired. These reach every registered package, including ones no allow-list mentions, and return identities rather than model content. INSTANCES: start with list_metamodel and describe_eclass to discover the metamodel, then create_dataset + create_instance + modify_feature to build objects; inspect_dataset (includeRecipe=true) returns a replayable recipe; export_dataset serializes XMI or JSON; export_package emits the full .ecore of one registered package - the only way to see a model's EAnnotations, its abstract classes and its supertypes as full <nsURI>#//<Name> references, all of which describe_eclass omits; create_from_json builds a whole graph in one call; replay_recipe reproduces a dataset deterministically. AUTHORING: create_dataset then create_epackage, which takes the whole package in one call via 'eClassifiers' (each entry an EClass with nested eAttributes/eReferences/eAnnotations, an EEnum with nested eLiterals, or an EDataType; siblings referenced as '#//<Name>' in any order) and returns the objectId of every nested element; add_eclass takes the same nested arrays for one class, and add_edatatype/add_eenum(+add_eenum_literal)/add_eattribute/add_ereference/add_eoperation(+add_eparameter)/add_eannotation add to what already exists, with add_etypeparameter and eGenericType/eGenericSuperTypes for generics; type references are <nsURI>#//<Name> (e.g. http://www.eclipse.org/emf/2002/Ecore#//EString) or a dataset objectId; register_package validates and registers the package so its classes become instantiable (list_registry/unregister_package manage it); export_dataset (format=xmi) yields the .ecore. IMPORT: import_ecore / import_instances re-load inline XMI to keep editing across prompts (import the .ecore before its instances). SECURITY: OSGi packages are visible only when allow-listed (deny-all); authored packages register only under allow-listed namespaces and must be dynamic; imported XMI is never dereferenced externally."
+    }
+}

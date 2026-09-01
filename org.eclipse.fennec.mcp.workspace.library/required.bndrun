@@ -10,7 +10,8 @@
 	bnd.identity;id='org.eclipse.fennec.mcp.auth.jwt',\
 	bnd.identity;id='org.eclipse.fennec.mcp.emf.tools',\
 	bnd.identity;id='org.eclipse.fennec.mcp.gogo.tools',\
-	bnd.identity;id='slf4j.simple'
+	bnd.identity;id='slf4j.simple',\
+	bnd.identity;id='org.eclipse.fennec.mcp.metadata.tools'
 	
 -runbundles: \
 	com.ethlo.time.itu;version='[1.14.0,1.14.1)',\
@@ -51,4 +52,6 @@
 	com.fasterxml.jackson.core.jackson-annotations;version='[2.22.0,2.22.1)',\
 	tools.jackson.core.jackson-core;version='[3.2.2,3.2.3)',\
 	tools.jackson.core.jackson-databind;version='[3.2.2,3.2.3)',\
-	tools.jackson.dataformat.jackson-dataformat-yaml;version='[3.2.2,3.2.3)'
+	tools.jackson.dataformat.jackson-dataformat-yaml;version='[3.2.2,3.2.3)',\
+	org.eclipse.fennec.mcp.endpoint;version=snapshot,\
+	org.eclipse.fennec.mcp.metadata.tools;version=snapshot

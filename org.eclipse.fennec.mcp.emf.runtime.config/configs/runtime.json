@@ -1,0 +1,8 @@
+{
+    ":configurator:resource-version": 1,
+    "org.apache.felix.http~emf": {
+        "org.osgi.service.http.port:int": 8099,
+        "org.apache.felix.http.host": "127.0.0.1",
+        "org.apache.felix.http.name": "emf"
+    }
+}

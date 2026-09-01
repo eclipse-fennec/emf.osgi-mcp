@@ -37,9 +37,14 @@ features:
     linkText: Development guide
   - icon: 🗂️
     title: EMF model tools
-    details: "Eleven tools to build, populate, validate and serialize EMF model instances in session-scoped datasets with replayable recipes — behind a deny-all EPackage/EClass allow-list and hard per-session resource caps."
-    link: /guides/01-architecture
-    linkText: Architecture
+    details: "Twenty-eight tools to build, validate and serialize EMF instances in session-scoped datasets with replayable recipes — and to author Ecore metamodels outright, registering them so their classes become instantiable. Behind a deny-all allow-list and hard per-session caps."
+    link: /guides/00-introduction
+    linkText: What ships
+  - icon: 🔎
+    title: Discover before you model
+    details: "Nine discovery tools query EAnnotations across every registered package at once, so an agent handed an unknown payload can locate the model family it belongs to — and follow its conventions — instead of inventing a metamodel from scratch."
+    link: /guides/00-introduction
+    linkText: What ships
   - icon: 🔒
     title: Secure by default
     details: "The shipped runtime binds to localhost, an authentication filter rejects every non-loopback request unless a bearer token is configured, and the tools enforce output, concurrency and timeout limits against resource exhaustion."
@@ -59,12 +64,16 @@ server framework** for OSGi environments in the
 [Eclipse Fennec](https://github.com/eclipse-fennec) ecosystem. It lets AI/LLM
 clients interact with a live OSGi runtime over the standard MCP protocol via HTTP.
 
-Two concrete servers ship on top of the core whiteboard API:
+Three servers ship on top of the core whiteboard API:
 
 - a **Gogo Shell MCP server** that exposes Apache Felix Gogo commands as MCP tools
-  (a development- and debugging-time tool — see the [security guide](/guides/02-security)); and
+  (a development- and debugging-time tool — see the [security guide](/guides/02-security));
 - an **EMF Model MCP server** that builds, validates and serializes EMF instances
-  from allow-listed metamodels.
+  from allow-listed metamodels, **authors Ecore metamodels** and registers them so
+  their classes become instantiable, and **discovers** what a runtime already
+  models by querying EAnnotations across every registered package; and
+- an **inference server**, the same runtime narrowed to one task: infer a
+  metamodel from sample payloads and hand it on.
 
 Key design decisions (see the [architecture guide](/guides/01-architecture)):
 
@@ -75,5 +84,7 @@ Key design decisions (see the [architecture guide](/guides/01-architecture)):
 - **Secure and bounded by default** — loopback binding, an authentication filter,
   and explicit output/concurrency/timeout caps.
 
-Internal design notes (the EMF model-tools plan, issue reports) live in the
-[`docs/` folder on GitHub](https://github.com/eclipse-fennec/emf.osgi-mcp/tree/main/docs).
+Reference documentation that is not part of the guides above — the EMF model
+tools, metamodel authoring, metadata discovery and the ServiceClient bridge —
+lives in the
+[`docs/` folder on GitHub](https://github.com/eclipse-fennec/emf.osgi-mcp/tree/snapshot/docs).

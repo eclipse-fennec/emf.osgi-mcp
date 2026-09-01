@@ -1,0 +1,12 @@
+Bundle-Name: Eclipse Fennec Inference MCP Runtime
+Bundle-Description: Resolution anchor for the metamodel-inference feature. Provides osgi.implementation=mcp.inference \
+ and requires the closure that feature needs: the EMF and metadata tools, the model.atlas publishing tool with its \
+ provider config, and org.eclipse.fennec.mcp.inference.config. A runtime opts in with a single -runrequires on the \
+ capability; the base EMF MCP runtime resolves and runs without any of it.
+-workingset: emf
+
+-buildpath: \
+	org.osgi.framework;version=latest,\
+	org.osgi.namespace.implementation;version=latest,\
+	slf4j.api;version=latest,\
+	org.eclipse.fennec.mcp.api;version=snapshot
