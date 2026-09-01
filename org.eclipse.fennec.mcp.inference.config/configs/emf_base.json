@@ -1,0 +1,27 @@
+{
+    ":configurator:resource-version": 1,
+    "_comment": "Duplicated verbatim in org.eclipse.fennec.mcp.emf.runtime.config and org.eclipse.fennec.mcp.inference.config so each runtime is self-contained. EMFModelGuard and EMFPackageRegistry are SINGLETON PIDs: if both bundles are ever deployed in one framework the Configurator applies one of them wholesale and discards the other - it does not merge. Keep the two copies identical, or the effective allow-list depends on which bundle wins.",
+    "EMFModelGuard": {
+        "epackage.allowlist": [
+            "https://eclipse.org/fennec/lorawan*",
+            "http://www.example.org/lorawan/specific/em310udl*",
+            "https://fennec.eclipse.org/event.atlas/inferred*"
+        ],
+        "eclass.allowlist": [
+            "https://eclipse.org/fennec/lorawan*",
+            "http://www.example.org/lorawan/specific/em310udl*",
+            "https://fennec.eclipse.org/event.atlas/inferred*"
+        ]
+    },
+    "EMFPackageRegistry": {
+        "nsuri.allowlist": [
+            "http://www.eclipse.org/emf/2002/Ecore",
+            "https://eclipse.org/fennec/lorawan",
+            "http://www.example.org/lorawan/specific/em310udl",
+            "https://eclipse.org/fennec/lorawan/*",
+            "https://fennec.eclipse.org/event.atlas/inferred*"
+        ],
+        "nsuri.denylist": [],
+        "max.models:int": 100
+    }
+}

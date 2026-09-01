@@ -1,7 +1,10 @@
 -resourceonly: true
 -includeresource: OSGI-INF/configurator/=configs/
 Bundle-Name: Eclipse Fennec EMF Metamodel MCP Runtime Configuration
-Bundle-Description: Test configuration for the EMF metamodel authoring MCP runtime (HTTP on /mcp/emf, port 8090; registration open for testing)
+Bundle-Description: Configuration for the EMF metamodel authoring MCP runtime: Felix HTTP on 127.0.0.1:8099, the MCPToolProvider~emfModel and ~emfMetadata sets, and the /mcp/emf server. \
+ Also owns the two singleton PIDs that are deployment-wide rather than per-feature - EMFModelGuard and \
+ EMFPackageRegistry - so every namespace this runtime permits, including the ones an inference run authors \
+ under, is allow-listed here. The inference feature lives in org.eclipse.fennec.mcp.inference.config.
 -workingset: emf
 Require-Capability: \
 	osgi.extender;filter:='(osgi.extender=osgi.configurator)',\

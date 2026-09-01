@@ -163,9 +163,11 @@ namespace prefix once instead of naming each package as it arrives — see
 These nine have a tool provider of their own,
 `MCPToolProvider~emfMetadata` (`name=emf_metadata_tool_provider`), in
 `org.eclipse.fennec.mcp.emf.runtime.config/configs/configuration.json`, next to
-`~emfModel` for the EMF tools and `~modelAtlas` for
-[publishing](model-atlas-publishing.md). The `/mcp/emf` server's
-`toolProviders.target` ORs the three names together.
+`~emfModel` for the EMF tools and `~modelAtlas` for publishing, whose tool
+ships with the [model.atlas](https://github.com/eclipse-fennec/model.atlas)
+project rather than from here. The `/mcp/emf` server's `toolProviders.target`
+ORs the three names together; the `~modelAtlas` entry is inert unless that
+bundle is deployed.
 
 Add each new `tool.name` to the matching provider's `tools.target` **and bump
 that provider's `tools.cardinality.minimum` to match** — an unsatisfied minimum

@@ -1,0 +1,20 @@
+{
+    ":configurator:resource-version": 1,
+    "MCPToolProvider~inference": {
+        "name": "inference_tool_provider",
+        "description": "Task-scoped set for inferring a metamodel from sample payloads and handing it to the model atlas: discover the family and its conventions, author the package, validate it against the samples, register and publish. Deliberately omits instance manipulation, import/replay, operations and generics",
+        "tools.target": "(|(tool.name=list_metamodel)(tool.name=describe_eclass)(tool.name=export_package)(tool.name=list_annotation_sources)(tool.name=find_classes_by_annotation)(tool.name=find_features_by_annotation)(tool.name=describe_aspects)(tool.name=create_dataset)(tool.name=create_epackage)(tool.name=add_eclass)(tool.name=add_eattribute)(tool.name=add_ereference)(tool.name=add_eannotation)(tool.name=add_eenum)(tool.name=add_eenum_literal)(tool.name=modify_feature)(tool.name=create_from_json)(tool.name=export_dataset)(tool.name=register_package)(tool.name=list_registry)(tool.name=post_to_model_atlas))",
+        "tools.cardinality.minimum:int": 21
+    },
+    "HttpMCPServerComponent~inference": {
+        "server.name": "osgi-emf-inference-mcp-server",
+        "server.version": "1.0",
+        "osgi.http.whiteboard.servlet.pattern": "/mcp/inference",
+        "auth.token": "$[env:MCP_INFERENCE_AUTH_TOKEN;default=$[prop:MCP_INFERENCE_AUTH_TOKEN;default=]]",
+        "osgi.http.whiteboard.target": "(org.apache.felix.http.name=inference)",
+        "has.tool.capability": true,
+        "toolProviders.target": "(name=inference_tool_provider)",
+        "toolProviders.cardinality.minimum:int": 1,
+        "server.instructions": "Use this MCP server to infer an Ecore metamodel from sample payloads and hand it to this runtime's model atlas. DISCOVER FIRST: an unknown payload is usually a variant of a model that already exists, so start with list_annotation_sources (the annotation vocabularies of this runtime), then find_classes_by_annotation / find_features_by_annotation - OMIT 'value' to match any value for a key, which is how you locate a model family and check whether a discriminator value is still free. export_package emits the full .ecore of one registered package and is the only way to see its EAnnotations, abstract classes and supertypes as full <nsURI>#//<Name> references; describe_eclass and list_metamodel give the shorter view, describe_aspects reads one element's parsed provider metadata. AUTHOR: create_dataset, then ONE create_epackage carrying the whole package in its 'eClassifiers' array - each classifier nests its own eAttributes / eReferences / eAnnotations, an EEnum its eLiterals, and classifiers may reference each other as '#//<Name>' in any declaration order. Do not issue one call per element: the call returns the objectId of every nested element, and add_eclass (which also takes nested eAttributes / eReferences / eAnnotations), add_eattribute, add_ereference, add_eannotation and modify_feature are for adding to or correcting a package that already exists. Type references are <nsURI>#//<Name> (e.g. http://www.eclipse.org/emf/2002/Ecore#//EString). Follow the conventions of the sibling models you found rather than inventing your own. VALIDATE: create_from_json builds an instance from one sample - load every sample and check nothing was silently dropped; export_dataset (format=xmi) serializes what you built. PUBLISH: register_package makes the package instantiable and is the precondition for post_to_model_atlas, which hands it to the atlas by nsURI - you never handle the document. Scope, stage and overwrite are fixed by the deployment; only allow-listed namespaces can be registered or published."
+    }
+}

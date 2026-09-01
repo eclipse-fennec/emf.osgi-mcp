@@ -323,6 +323,21 @@ remote server's tools, and claiming that interface would mean returning empty
 lists that read as "this server has no tools" rather than "ask the server
 yourself".
 
+The two live in different bundles, and that is the point. `MCPEndpoint` and
+`RemoteMCPEndpoint` are in **`org.eclipse.fennec.mcp.endpoint`**, whose manifest
+imports nothing but `java.*` and its own package — no MCP SDK, no Reactor, no
+Jackson. A consumer that only has to reach a server puts that bundle on its
+buildpath and never drags the SDK closure into its runtime; `org.eclipse.fennec.mcp.api`
+depends on it and adds the server half.
+
+::: warning Package move
+`MCPEndpoint` was previously exported from `org.eclipse.fennec.mcp.api`. Hosting
+one package from two bundles would be a split package, so the class moved to
+`org.eclipse.fennec.mcp.endpoint`; update the import if you were binding it.
+The DS component name is unchanged, so existing `RemoteMCPEndpoint~…` factory
+configurations keep working untouched.
+:::
+
 ### Deploying Behind a Reverse Proxy (SSE)
 
 The HTTP transport is **Streamable HTTP**: responses to the MCP endpoint are served as a
@@ -414,7 +429,9 @@ This enables type-safe round-tripping: the MCP client receives JSON matching the
 
 ## EMF Model Tools (`org.eclipse.fennec.mcp.emf.tools`)
 
-The `org.eclipse.fennec.mcp.emf.tools` bundle provides 11 MCP tools that let an agent create, populate, validate and serialize EMF model instances for **allow-listed** EPackages/EClasses (datasets, replayable recipes, deny-all security model).
+The `org.eclipse.fennec.mcp.emf.tools` bundle provides 28 MCP tools. They let an agent create, populate, validate and serialize EMF model **instances** for allow-listed EPackages/EClasses (datasets, replayable recipes, deny-all security model), **author Ecore metamodels** and register them into a session-local registry so their classes become instantiable, and round-trip both through inline XMI.
+
+Metamodel authoring has a guide of its own — [Metamodel Authoring](emf-metamodel-authoring.md) — as does the companion discovery bundle `org.eclipse.fennec.mcp.metadata.tools` ([Metadata Discovery](metadata-discovery-tools.md), 9 tools).
 
 ### Security: deny-all allow-lists
 
@@ -475,19 +492,68 @@ Two consequences worth knowing:
 
 ### Tool overview
 
+**Discover and inspect**
+
 | Tool | Purpose |
 |------|---------|
 | `list_metamodel` | List allow-listed EPackages, or the EClasses of one package |
 | `describe_eclass` | Feature table of an EClass (kind, type, multiplicity, enums) |
-| `create_dataset` | New session-scoped dataset (the unit of state) |
+| `export_package` | Full `.ecore` of a registered package — EAnnotations, abstract classes and supertypes, which `describe_eclass` omits |
+
+**Datasets — the unit of state**
+
+| Tool | Purpose |
+|------|---------|
+| `create_dataset` | New session-scoped dataset |
 | `inspect_dataset` | List datasets / objects, validation summary, build recipe |
 | `manage_dataset` | `regenerate` (deterministic recipe replay), `clear`, `delete` |
 | `export_dataset` | Serialize all roots as XMI or JSON (inline up to a byte cap) |
+| `replay_recipe` | Rebuild a dataset deterministically from a recipe, no LLM |
+
+**Instances**
+
+| Tool | Purpose |
+|------|---------|
 | `create_instance` | New instance of an allow-listed EClass → `objectId` |
 | `modify_feature` | `set`/`unset`/`add`/`remove` one structural feature |
 | `delete_instance` | Remove an object incl. containment subtree and references |
 | `create_from_json` | Whole instance graph from one JSON payload (via Fennec codec) |
-| `replay_recipe` | Rebuild a dataset deterministically from a recipe, no LLM |
+
+**Metamodel authoring**
+
+`create_epackage` and `add_eclass` are composite: they take their children
+inline, so a whole package is one call rather than one call per element. The
+remaining tools extend a package that already exists.
+
+| Tool | Purpose |
+|------|---------|
+| `create_epackage` | New EPackage, optionally carrying the whole package in `eClassifiers` |
+| `add_eclass` | Add an EClass, optionally with nested `eAttributes` / `eReferences` / `eAnnotations` |
+| `add_eattribute` | Add an EAttribute; `eType` is `<nsURI>#//<Name>` or a dataset objectId |
+| `add_ereference` | Add an EReference — containment, `eOpposite`, `eKeys` |
+| `add_edatatype` | Add a dynamic EDataType (registered packages must be dynamic) |
+| `add_eenum` / `add_eenum_literal` | Add an EEnum and its literals |
+| `add_eoperation` / `add_eparameter` | Add an EOperation and its parameters |
+| `add_eannotation` | Attach an EAnnotation (source, string details, references) to any element |
+| `add_etypeparameter` | Declare a generic type parameter on an EClass, EDataType or EOperation |
+
+**Session package registry**
+
+| Tool | Purpose |
+|------|---------|
+| `register_package` | Validate an authored EPackage and register a frozen copy, making its classes instantiable |
+| `unregister_package` | Remove a package by nsURI; existing instances stay live |
+| `list_registry` | The packages registered in this session, with their instantiable classes |
+
+**Import**
+
+| Tool | Purpose |
+|------|---------|
+| `import_ecore` | Load an inline `.ecore` into a new dataset and register its packages |
+| `import_instances` | Load inline instance XMI whose package is already registered |
+
+Imports are hardened: external references are never dereferenced, the document
+must be self-contained, DOCTYPE is rejected and size is capped.
 
 ### Runtime introspection (service.changecount pattern)
 

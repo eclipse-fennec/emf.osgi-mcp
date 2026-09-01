@@ -1,0 +1,6 @@
+# Jars dropped in by hand for local testing - bundles built from a sibling project whose
+# change is not published yet. They are build output of another repository and must not be
+# committed here. Nothing is expected to live here in a normal checkout: the model.atlas
+# bundles now resolve from their published snapshot via cnf/central.mvn.
+/*/
+index.xml.sha
