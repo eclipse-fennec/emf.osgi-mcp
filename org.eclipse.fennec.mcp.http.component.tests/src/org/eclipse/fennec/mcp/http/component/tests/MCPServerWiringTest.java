@@ -30,6 +30,9 @@ import org.osgi.test.common.annotation.InjectService;
 import org.osgi.test.junit5.context.BundleContextExtension;
 import org.osgi.test.junit5.service.ServiceExtension;
 
+import io.modelcontextprotocol.client.McpSyncClient;
+import io.modelcontextprotocol.spec.McpSchema.Tool;
+
 /**
  * The two DS knobs the runtime configurations rely on, seen from outside the component.
  * <ul>
@@ -81,6 +84,38 @@ public class MCPServerWiringTest extends AbstractMCPServerTest {
 		assertThat(server.getTools())
 				.as("both providers contribute the one tool they match")
 				.hasSize(2);
+	}
+
+	@Test
+	@DisplayName("providers overlapping on a tool do not take the server down")
+	public void overlappingProvidersDoNotKillTheServer(@InjectBundleContext BundleContext context,
+			@InjectService(timeout = TIMEOUT_MS) ConfigurationAdmin cm) throws IOException {
+		// Two providers whose filters both match one tool - the LDAP filters in the runtime
+		// configs are long lists of tool names, and one name in two of them is all it takes.
+		// The aggregate then holds two specifications of the same name.
+		registerTool(context, TestMCPTool.echo("wiring_shared"), GROUP + "-shared");
+		createToolProvider(cm, "overlapA", "overlap-provider-a", GROUP + "-shared", 1);
+		createToolProvider(cm, "overlapB", "overlap-provider-b", GROUP + "-shared", 1);
+		Dictionary<String, Object> properties = serverProperties("overlap-test-server", "/test/overlap/mcp",
+				"ignored");
+		properties.put("toolProviders.target", "(name=overlap-provider-*)");
+		properties.put("toolProviders.cardinality.minimum", 2);
+		createServer(cm, "overlap", properties);
+
+		// syncTools() already tolerates a duplicate arriving later, first one winning. The
+		// same duplicate present at activation must not be treated more harshly: losing the
+		// whole endpoint over an overlap between two provider filters is out of proportion
+		// to serving the tool once.
+		MCPServer server = awaitService(context, MCPServer.class, "(server.name=overlap-test-server)");
+		assertThat(server.getTools())
+				.as("the aggregate reports what the providers contribute, duplicates included")
+				.hasSize(2);
+
+		McpSyncClient client = mcpClient(context, "/test/overlap/mcp", null);
+		client.initialize();
+		assertThat(client.listTools().tools()).extracting(Tool::name)
+				.as("the client is served one tool per name")
+				.containsExactly("wiring_shared");
 	}
 
 	@Test
