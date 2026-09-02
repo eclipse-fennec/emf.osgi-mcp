@@ -72,6 +72,20 @@ selection of tools over the same transport:
 Requirements: **Java 21** and the bundled Gradle wrapper (bnd 7.2.1+ workspace
 plugin).
 
+::: warning Assembling your own runtime: SpiFly needs a current ASM
+The MCP SDK publishes its JSON mapper and schema validator through
+`META-INF/services` only, so a runtime needs Aries SpiFly to turn them into OSGi
+services — without them `HttpMCPServerComponent` never activates. Deploy the
+**`org.apache.aries.spifly.dynamic.bundle`** variant together with a current
+`org.objectweb.asm`, as every shipped `launch.bndrun` does.
+
+Not `dynamic.framework.extension`: it embeds an ASM that refuses class files past
+V22, and since Felix's Jetty bundle declares itself a `ServiceLoader` consumer,
+SpiFly's weaving hook fails inside Jetty's activator on any JVM newer than Java
+22. Jetty stays in `RESOLVED`, the runtime comes up with no HTTP endpoint at all,
+and the only trace is a `Weaving hook failed` entry in the framework log.
+:::
+
 ## Next steps
 
 - [Architecture](./01-architecture) — the whiteboard wiring and reactive model.
