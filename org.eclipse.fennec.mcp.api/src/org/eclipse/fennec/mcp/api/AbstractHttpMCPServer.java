@@ -198,6 +198,12 @@ public abstract class AbstractHttpMCPServer implements MCPServer {
 		if (server == null) {
 			return;
 		}
+		// A server announcing no tools registers no tools/list or tools/call handler, and
+		// the SDK rejects addTool on it. Nothing to propagate, and the rejection would only
+		// be dropped by the subscribe below.
+		if (!hasToolCapability()) {
+			return;
+		}
 		Map<String, McpServerFeatures.AsyncToolSpecification> current = new LinkedHashMap<>();
 		getTools().forEach(spec -> current.putIfAbsent(spec.tool().name(), spec));
 		for (String name : List.copyOf(registeredToolNames)) {

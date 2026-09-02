@@ -75,7 +75,12 @@ public class MCPToolProviderImpl implements MCPToolProvider{
 	@Reference
 	private McpJsonMapperSupplier jsonMapper;
 	private final List<MCPTool> tools = new CopyOnWriteArrayList<>();
-	private volatile Runnable changeListener;
+	/**
+	 * All listeners, not one: this provider can be bound by more than one server, and
+	 * keeping only the last would leave every earlier server serving the tool list it saw
+	 * at its own activation - stale, with nothing to show it.
+	 */
+	private final List<Runnable> changeListeners = new CopyOnWriteArrayList<>();
 
 	@Reference(name = "tools", cardinality = ReferenceCardinality.AT_LEAST_ONE, policy = ReferencePolicy.DYNAMIC)
 	void addTool(MCPTool tool) {
@@ -90,14 +95,31 @@ public class MCPToolProviderImpl implements MCPToolProvider{
 
 	@Override
 	public void onToolsChanged(Runnable listener) {
-		this.changeListener = listener;
+		if (listener != null && !changeListeners.contains(listener)) {
+			changeListeners.add(listener);
+		}
 	}
 
-	private void notifyChanged() {
-		Runnable listener = changeListener;
+	@Override
+	public void removeToolsChangedListener(Runnable listener) {
 		if (listener != null) {
-			listener.run();
+			changeListeners.remove(listener);
 		}
+	}
+
+	/**
+	 * Notifies every listener, and lets none of them keep the others from being told: this
+	 * runs on the thread that registered or unregistered the {@code MCPTool} service, so a
+	 * listener that throws would otherwise abort the notification of the rest.
+	 */
+	private void notifyChanged() {
+		changeListeners.forEach(listener -> {
+			try {
+				listener.run();
+			} catch (RuntimeException e) {
+				LOGGER.log(Level.WARNING, "A tool change listener of provider " + description + " failed", e);
+			}
+		});
 	}
 
 	@Activate

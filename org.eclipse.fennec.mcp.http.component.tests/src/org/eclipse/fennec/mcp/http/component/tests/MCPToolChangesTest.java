@@ -101,6 +101,33 @@ public class MCPToolChangesTest extends AbstractMCPServerTest {
 		assertThat(toolNames(client)).containsExactly("changes_first");
 	}
 
+	@Test
+	@DisplayName("two servers on one provider are both told about a late tool")
+	public void everyServerOnAProviderSeesTheChange(@InjectBundleContext BundleContext context,
+			@InjectService(timeout = TIMEOUT_MS) ConfigurationAdmin cm) throws IOException {
+		// One provider, two servers - the shape a runtime grows into by adding an endpoint
+		// over tools it already serves. A provider that kept only the last listener would
+		// leave this first server serving its activation-time tool list for good, with
+		// nothing anywhere to show it: getTools() recomputes and stays green, and the
+		// second server keeps working.
+		String secondPattern = "/test/changes/second/mcp";
+		createServer(cm, "changesSecond", serverProperties("changes-second-server", secondPattern, PROVIDER_NAME));
+		awaitService(context, MCPServer.class, "(server.name=changes-second-server)");
+
+		McpSyncClient onFirst = mcpClient(context, SERVLET_PATTERN, null);
+		onFirst.initialize();
+		McpSyncClient onSecond = mcpClient(context, secondPattern, null);
+		onSecond.initialize();
+
+		registerTool(context, TestMCPTool.echo("changes_for_both"), GROUP);
+
+		awaitCondition("The server that bound the provider last never saw the late tool",
+				() -> toolNames(onSecond).contains("changes_for_both"));
+		awaitCondition("The server that bound the provider first never saw the late tool - its "
+				+ "change listener was replaced by the second server's",
+				() -> toolNames(onFirst).contains("changes_for_both"));
+	}
+
 	private static List<String> toolNames(McpSyncClient client) {
 		return client.listTools().tools().stream().map(Tool::name).toList();
 	}
