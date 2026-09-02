@@ -85,6 +85,12 @@ import org.osgi.service.servlet.whiteboard.annotations.RequireHttpWhiteboard;
 public class HttpMCPServerComponent extends AbstractHttpMCPServer{
 	
 	private HttpMCPServerConfig config;
+	/**
+	 * Kept so deactivate can take it off the providers again: they outlive this component,
+	 * and a listener left behind would keep calling into a server that has shut its MCP
+	 * session down.
+	 */
+	private Runnable toolsChangedListener;
 	
 	@Reference
 	private McpJsonMapperSupplier jsonMapper;
@@ -109,11 +115,16 @@ public class HttpMCPServerComponent extends AbstractHttpMCPServer{
 		initializeMCPServer();
 		// propagate dynamic tool changes (e.g. bridged ServiceClient tools) to
 		// connected clients via notifications/tools/list_changed
-		toolProviders.forEach(provider -> provider.onToolsChanged(this::syncTools));
+		toolsChangedListener = this::syncTools;
+		toolProviders.forEach(provider -> provider.onToolsChanged(toolsChangedListener));
 	}
 	
 	@Deactivate
 	public void deactivate() {
+		if (toolsChangedListener != null) {
+			toolProviders.forEach(provider -> provider.removeToolsChangedListener(toolsChangedListener));
+			toolsChangedListener = null;
+		}
 		unregisterMCPServer();
 	}
 
