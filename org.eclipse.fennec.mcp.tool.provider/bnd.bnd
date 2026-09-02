@@ -18,5 +18,6 @@ Bundle-Description: Component that collects MCP Tools for the MCP Whiteboard
 
 -testpath: \
 	assertj-core,\
+	io.projectreactor.reactor-test,\
 	slf4j.api,\
 	slf4j.simple
