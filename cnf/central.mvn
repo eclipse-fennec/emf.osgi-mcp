@@ -179,6 +179,8 @@ com.fasterxml:classmate:1.7.3
 io.modelcontextprotocol.sdk:mcp-core:2.0.0
 io.modelcontextprotocol.sdk:mcp-json-jackson3:2.0.0
 io.projectreactor:reactor-core:3.7.0
+#test only: StepVerifier, for driving the provider timeout in virtual time
+io.projectreactor:reactor-test:3.7.0
 org.reactivestreams:reactive-streams:1.0.4
 com.networknt:json-schema-validator:3.0.6
 org.snakeyaml:snakeyaml-engine:2.10
