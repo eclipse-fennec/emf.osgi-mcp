@@ -139,12 +139,7 @@ public abstract class AbstractHttpMCPServer implements MCPServer {
 				.serverInfo(getServerName(), getServerVersion())
 				.jsonMapper(getJsonMapper())
 				.jsonSchemaValidator(getSchemaValidator())
-				.capabilities(McpSchema.ServerCapabilities.builder()
-						.tools(hasToolCapability())
-						.resources(hasResourceCapability(), hasResourceCapability())
-						.prompts(hasPromptCapability())
-						.logging()
-						.build())
+				.capabilities(buildCapabilities())
 				.tools(getTools())
 				.prompts(getPrompts())
 				.resources(getResources())
@@ -153,6 +148,40 @@ public abstract class AbstractHttpMCPServer implements MCPServer {
 				.build();
 		registeredToolNames.clear();
 		getTools().forEach(spec -> registeredToolNames.add(spec.tool().name()));
+	}
+
+	/**
+	 * The capabilities announced in the {@code initialize} response, which is what a client
+	 * consults before it calls {@code tools/list}, {@code prompts/list} or
+	 * {@code resources/list} at all.
+	 * <p>
+	 * A capability is announced only when this server has that kind of thing to serve.
+	 * Calling the SDK builder's {@code tools(..)} / {@code prompts(..)} /
+	 * {@code resources(..)} always creates the capability, whatever is passed - the argument
+	 * is that capability's {@code listChanged} flag, not whether to include it - so
+	 * {@code hasXCapability()} has to gate the call rather than be its argument.
+	 * <p>
+	 * The flags passed are what this class can actually honour. {@code listChanged} promises
+	 * a {@code notifications/.../list_changed} whenever the list changes, and only tools get
+	 * one, from {@link #syncTools()}. Prompts and resources are static here, so they claim
+	 * nothing; {@code subscribe} is likewise false, since no {@code resources/subscribe} is
+	 * implemented. A subclass that starts serving either one and notifies about it should
+	 * override this.
+	 *
+	 * @return the capabilities to announce, never {@code null}
+	 */
+	protected McpSchema.ServerCapabilities buildCapabilities() {
+		McpSchema.ServerCapabilities.Builder capabilities = McpSchema.ServerCapabilities.builder().logging();
+		if (hasToolCapability()) {
+			capabilities.tools(true);
+		}
+		if (hasPromptCapability()) {
+			capabilities.prompts(false);
+		}
+		if (hasResourceCapability()) {
+			capabilities.resources(false, false);
+		}
+		return capabilities.build();
 	}
 
 	private final Set<String> registeredToolNames = ConcurrentHashMap.newKeySet();
