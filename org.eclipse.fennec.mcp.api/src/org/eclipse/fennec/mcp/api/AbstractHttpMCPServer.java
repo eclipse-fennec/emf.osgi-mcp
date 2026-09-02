@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Logger;
 
 import org.eclipse.fennec.mcp.api.auth.McpTokenVerifier;
 import org.osgi.framework.BundleContext;
@@ -52,6 +53,8 @@ import jakarta.servlet.Servlet;
  */
 @RequireHttpWhiteboard
 public abstract class AbstractHttpMCPServer implements MCPServer {
+
+	private static final Logger LOGGER = Logger.getLogger(AbstractHttpMCPServer.class.getName());
 
 	private ServiceRegistration<?> servletRegistration;
 	private ServiceRegistration<?> filterRegistration;
@@ -135,19 +138,46 @@ public abstract class AbstractHttpMCPServer implements MCPServer {
 
 		registerHttpWhiteboard(transportProvider, context);
 
+		List<McpServerFeatures.AsyncToolSpecification> tools = distinctTools();
 		mcpServer = McpServer.async(transportProvider)
 				.serverInfo(getServerName(), getServerVersion())
 				.jsonMapper(getJsonMapper())
 				.jsonSchemaValidator(getSchemaValidator())
 				.capabilities(buildCapabilities())
-				.tools(getTools())
+				.tools(tools)
 				.prompts(getPrompts())
 				.resources(getResources())
 				.requestTimeout(Duration.ofMinutes(10))
 				.instructions(getInstructions())
 				.build();
 		registeredToolNames.clear();
-		getTools().forEach(spec -> registeredToolNames.add(spec.tool().name()));
+		tools.forEach(spec -> registeredToolNames.add(spec.tool().name()));
+	}
+
+	/**
+	 * The aggregated tools, at most one per name, first one winning.
+	 * <p>
+	 * Two providers bound to one server can match the same {@code MCPTool} - the target
+	 * filters in a deployment are long lists of tool names, and one name in two of them is
+	 * enough. The SDK rejects a duplicate name outright, which would throw out of
+	 * {@code @Activate} and leave the deployment with no endpoint at all: a great deal to
+	 * lose over an overlap between two filters. {@link #syncTools()} already tolerates the
+	 * same duplicate when it arrives later, keeping the first, so this keeps the first too
+	 * rather than treating the two moments differently.
+	 *
+	 * @return the tools to serve, never {@code null}
+	 */
+	protected List<McpServerFeatures.AsyncToolSpecification> distinctTools() {
+		Map<String, McpServerFeatures.AsyncToolSpecification> byName = new LinkedHashMap<>();
+		getTools().forEach(spec -> {
+			if (byName.putIfAbsent(spec.tool().name(), spec) != null) {
+				LOGGER.warning(() -> String.format(
+						"Server %s: more than one tool provider offers the tool '%s'; serving the first and "
+								+ "ignoring the rest. Check the tool target filters of its providers.",
+						getServerName(), spec.tool().name()));
+			}
+		});
+		return List.copyOf(byName.values());
 	}
 
 	/**
