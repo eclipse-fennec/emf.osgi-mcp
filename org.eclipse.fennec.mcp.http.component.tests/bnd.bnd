@@ -1,0 +1,28 @@
+Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE}
+Bundle-Name: Eclipse Fennec OSGi MCP HTTP Component OSGi Test
+Bundle-Description: Guards that HttpMCPServerComponent actually activates under OSGi, registers a \
+	reachable and guarded endpoint with the HTTP Whiteboard, and serves the MCP protocol over it - none \
+	of which a bnd resolve can see
+
+-library: enableOSGi-Test
+
+# The runtime needs these workspace bundles, but only by identity in test.bndrun - which
+# creates no build order. Without this, a clean build resolves the runtime before the
+# alphabetically later tool.provider has been built and fails to find it.
+-dependson: \
+	org.eclipse.fennec.mcp.http.component,\
+	org.eclipse.fennec.mcp.tool.provider
+
+-buildpath: \
+	org.osgi.framework;version=latest,\
+	org.osgi.service.cm;version=latest,\
+	org.osgi.dto;version=latest,\
+	org.eclipse.fennec.mcp.api;version=snapshot,\
+	org.eclipse.fennec.mcp.endpoint;version=snapshot,\
+	io.modelcontextprotocol.sdk.mcp-core;version=latest,\
+	io.projectreactor.reactor-core;version=latest,\
+	reactive-streams;version=latest,\
+	org.osgi.service.servlet;version=latest,\
+	org.apache.felix.http.servlet-api;version=latest
+
+Private-Package: org.eclipse.fennec.mcp.http.component.tests

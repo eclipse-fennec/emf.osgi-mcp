@@ -1,0 +1,71 @@
+-library: enableOSGi-Test
+
+-runrequires: \
+	bnd.identity;id='org.eclipse.fennec.mcp.http.component.tests',\
+	bnd.identity;id='org.eclipse.fennec.mcp.http.component',\
+	bnd.identity;id='org.eclipse.fennec.mcp.tool.provider',\
+	bnd.identity;id='org.apache.felix.configadmin',\
+	bnd.identity;id='org.apache.felix.http.jetty12',\
+	bnd.identity;id='org.eclipse.fennec.emf.osgi.component',\
+	bnd.identity;id='org.apache.aries.spifly.dynamic.bundle'
+
+-runbundles.test: \
+	org.eclipse.fennec.mcp.http.component.tests;version=snapshot
+
+-runfw: org.apache.felix.framework
+-runee: JavaSE-21
+# SpiFly's framework extension embeds a 2023 ASM that refuses class files past V22, and its
+# weaving hook then kills org.apache.felix.http.jetty12 on Java 23+. The dynamic.bundle
+# variant imports org.objectweb.asm instead, so a current ASM can be deployed with it.
+-runblacklist: \
+	bnd.identity;id='org.gecko.emf.osgi.component.minimal',\
+	bnd.identity;id='org.apache.aries.spifly.dynamic.framework.extension'
+
+# Port 0 makes Jetty bind a free ephemeral port, so the tests can drive the endpoint over
+# real HTTP without a fixed port to collide with (which is what -1 was avoiding). The tests
+# read the actual port back off the HttpServiceRuntime's osgi.http.endpoint property.
+-runproperties: \
+	org.osgi.service.http.port=0
+-runbundles: \
+	com.ethlo.time.itu;version='[1.14.0,1.14.1)',\
+	com.fasterxml.jackson.core.jackson-annotations;version='[2.22.0,2.22.1)',\
+	com.networknt.json-schema-validator;version='[3.0.6,3.0.7)',\
+	io.modelcontextprotocol.sdk.mcp-core;version='[2.0.0,2.0.1)',\
+	io.modelcontextprotocol.sdk.mcp-json-jackson3;version='[2.0.0,2.0.1)',\
+	io.projectreactor.reactor-core;version='[3.7.0,3.7.1)',\
+	junit-jupiter-api;version='[5.14.2,5.14.3)',\
+	junit-jupiter-params;version='[5.14.2,5.14.3)',\
+	junit-platform-commons;version='[1.14.2,1.14.3)',\
+	org.apache.aries.spifly.dynamic.framework.extension;version='[1.3.7,1.3.8)',\
+	org.apache.commons.commons-fileupload;version='[1.6.0,1.6.1)',\
+	org.apache.commons.commons-io;version='[2.22.0,2.22.1)',\
+	org.apache.felix.configadmin;version='[1.9.26,1.9.27)',\
+	org.apache.felix.http.jetty12;version='[1.1.0,1.1.1)',\
+	org.apache.felix.http.servlet-api;version='[6.1.0,6.1.1)',\
+	org.apache.felix.scr;version='[2.2.12,2.2.13)',\
+	org.eclipse.emf.common;version='[2.44.0,2.44.1)',\
+	org.eclipse.emf.ecore;version='[2.41.0,2.41.1)',\
+	org.eclipse.emf.ecore.xmi;version='[2.39.0,2.39.1)',\
+	org.eclipse.fennec.codec.api;version='[0.1.0,0.1.1)',\
+	org.eclipse.fennec.codec.metadata;version='[0.1.0,0.1.1)',\
+	org.eclipse.fennec.emf.osgi.component;version='[1.1.0,1.1.1)',\
+	org.eclipse.fennec.emf.osgi.metadata;version='[1.1.0,1.1.1)',\
+	org.eclipse.fennec.mcp.api;version=snapshot,\
+	org.eclipse.fennec.mcp.endpoint;version=snapshot,\
+	org.eclipse.fennec.mcp.http.component;version=snapshot,\
+	org.eclipse.fennec.mcp.http.component.tests;version=snapshot,\
+	org.eclipse.fennec.mcp.tool.provider;version=snapshot,\
+	org.opentest4j;version='[1.3.0,1.3.1)',\
+	org.osgi.service.component;version='[1.5.1,1.5.2)',\
+	org.osgi.test.common;version='[1.3.0,1.3.1)',\
+	org.osgi.test.junit5;version='[1.3.0,1.3.1)',\
+	org.osgi.util.converter;version='[1.0.9,1.0.10)',\
+	org.osgi.util.function;version='[1.2.0,1.2.1)',\
+	org.osgi.util.promise;version='[1.3.0,1.3.1)',\
+	org.snakeyaml.engine;version='[3.0.1,3.0.2)',\
+	reactive-streams;version='[1.0.4,1.0.5)',\
+	slf4j.api;version='[2.0.17,2.0.18)',\
+	slf4j.simple;version='[2.0.17,2.0.18)',\
+	tools.jackson.core.jackson-core;version='[3.2.2,3.2.3)',\
+	tools.jackson.core.jackson-databind;version='[3.2.2,3.2.3)',\
+	tools.jackson.dataformat.jackson-dataformat-yaml;version='[3.2.2,3.2.3)'
