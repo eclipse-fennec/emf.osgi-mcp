@@ -23,10 +23,12 @@ import java.util.Optional;
 
 import org.eclipse.fennec.mcp.api.auth.McpPrincipal;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
@@ -35,6 +37,7 @@ import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
 import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.PlainJWT;
 import com.nimbusds.jwt.SignedJWT;
 
 /**
@@ -61,8 +64,12 @@ class JwtTokenVerifierComponentTest {
 	}
 
 	private static JwtTokenVerifierComponent verifier(String audience) {
+		return verifier(audience, "RS256");
+	}
+
+	private static JwtTokenVerifierComponent verifier(String audience, String... allowedAlgorithms) {
 		return new JwtTokenVerifierComponent(
-				JwtTokenVerifierComponent.createProcessor(jwkSource, config(audience)));
+				JwtTokenVerifierComponent.createProcessor(jwkSource, config(audience, allowedAlgorithms)));
 	}
 
 	private static String token(RSAKey key, JWTClaimsSet claims) throws Exception {
@@ -135,7 +142,45 @@ class JwtTokenVerifierComponentTest {
 		assertThat(verifier("").verify("not-a-jwt", null)).isEmpty();
 	}
 
-	private static JwtVerifierConfig config(String audience) {
+	@Test
+	@DisplayName("an algorithm outside the allow-list is rejected, even correctly signed")
+	void algorithmOutsideTheAllowListIsRejected() throws Exception {
+		// Signed by the real key, with valid claims: the only thing wrong is the algorithm,
+		// so nothing but the allow-list can reject this. That is what keeps
+		// allowed.algorithms from being decoration.
+		String token = token(signingKey, validClaims().build());
+
+		assertThat(verifier("", "RS512").verify(token, null))
+				.as("RS256 is not in the configured allow-list")
+				.isEmpty();
+		assertThat(verifier("", "RS256", "RS512").verify(token, null))
+				.as("and is accepted once it is - so the rejection above was the allow-list, "
+						+ "not something else about the token")
+				.isPresent();
+	}
+
+	@Test
+	void unsignedToken_isRejected() throws Exception {
+		// alg: none - the oldest JWT attack there is. Claims are otherwise valid.
+		String token = new PlainJWT(validClaims().build()).serialize();
+
+		assertThat(verifier("").verify(token, null)).isEmpty();
+	}
+
+	@Test
+	void symmetricallySignedToken_isRejected() throws Exception {
+		// Algorithm confusion: an attacker who has the public JWKS signs HS256 with it and
+		// hopes the verifier treats an RSA public key as a MAC secret.
+		SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.HS256).keyID("k1").build(),
+				validClaims().build());
+		jwt.sign(new MACSigner("a-secret-long-enough-for-hs256-signing"));
+
+		assertThat(verifier("", "RS256", "HS256").verify(jwt.serialize(), null))
+				.as("even with HS256 allow-listed, the JWKS holds no MAC key to verify it with")
+				.isEmpty();
+	}
+
+	private static JwtVerifierConfig config(String audience, String... allowedAlgorithms) {
 		return new JwtVerifierConfig() {
 			@Override
 			public Class<? extends Annotation> annotationType() {
@@ -159,7 +204,7 @@ class JwtTokenVerifierComponentTest {
 
 			@Override
 			public String[] allowed_algorithms() {
-				return new String[] { "RS256" };
+				return allowedAlgorithms;
 			}
 
 			@Override
