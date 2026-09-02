@@ -274,9 +274,9 @@ Further PIDs are documented where their feature lives: `JwtTokenVerifier` in
 | `server.version` | String | no | `1.0.0` | Server version reported to clients |
 | `osgi.http.whiteboard.servlet.pattern` | String | yes | — | URL path for the MCP endpoint (e.g. `/mcp/tools`) |
 | `osgi.http.whiteboard.target` | String | yes | — | LDAP filter targeting the HTTP runtime (e.g. `(org.apache.felix.http.name=myserver)`) |
-| `has.tool.capability` | boolean | no | `false` | Advertise tool capability to clients |
-| `has.prompt.capability` | boolean | no | `false` | Advertise prompt capability to clients |
-| `has.resource.capability` | boolean | no | `false` | Advertise resource capability to clients |
+| `has.tool.capability` | boolean | no | `false` | Announce the tool capability in the `initialize` response (with `listChanged`, since tool changes are pushed). Left `false`, the capability is absent and the server registers no `tools/list` or `tools/call` handler at all — so a client never asks. |
+| `has.prompt.capability` | boolean | no | `false` | Announce the prompt capability. Absent when `false`; the base server serves no prompts and claims no `listChanged`. |
+| `has.resource.capability` | boolean | no | `false` | Announce the resource capability. Absent when `false`; the base server serves no resources and claims neither `listChanged` nor `subscribe`. |
 | `server.instructions` | String | no | — | Instructions shown to MCP clients |
 | `keep.alive.interval.seconds` | long | no | `0` (disabled) | Interval for keep-alive pings to active sessions. Disabled by default. Only enable (a positive value, kept below the reverse-proxy read timeout) when clients maintain a long-lived listening SSE stream; otherwise the SDK floods the log with `Stream unavailable for session …`. See [Deploying Behind a Reverse Proxy](#deploying-behind-a-reverse-proxy-sse). |
 | `auth.token` | String (password) | no | `""` (empty) | Bearer token required in the `Authorization: Bearer <token>` header. When empty, only loopback callers are permitted and any remote request is rejected. Set a strong token before exposing the endpoint beyond localhost. |
@@ -374,7 +374,9 @@ MCPTool services                MCPToolProvider                   HttpMCPServerC
                                   name=my_provider
 ```
 
-This allows flexible composition: multiple tool providers can collect different tool subsets, and multiple servers can expose different providers on different endpoints.
+This allows flexible composition: multiple tool providers can collect different tool subsets, and multiple servers can expose different providers on different endpoints. A provider may also be bound by more than one server — all of them are notified when its tool set changes.
+
+Filters can overlap. If two providers behind the *same* server match one tool, the server serves a single copy of it (the first) and logs a warning naming the tool; it does not refuse to start. Worth checking the framework log for after widening a `tools.target`, since the duplicate is otherwise invisible.
 
 ## Example: The Gogo MCP Server
 

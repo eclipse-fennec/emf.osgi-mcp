@@ -58,7 +58,7 @@ gogo.tools  tool.provider  http.component
 | `org.eclipse.fennec.mcp.gogo.tools` | Concrete tool implementations: `ExecuteGogoTool` (runs Gogo commands), `ListCommandsTool` (discovers available commands). |
 | `org.eclipse.fennec.mcp.emf.tools` | EMF model tools (28 MCP tools): build/validate/serialize EMF instances **and** author Ecore metamodels (EPackage/EClass/EDataType/EEnum/EAnnotation/EOperation/features + full generics), register them into a session-local `PackageRegistry` (so their classes become instantiable), and round-trip via hardened inline-XMI import. `create_epackage` and `add_eclass` are **composite**: they take their children inline (`eClassifiers` / `eAttributes` / `eReferences` / `eAnnotations` / `eLiterals`), wired in a second pass so intra-package `#//<Name>` refs are order-independent, all-or-nothing against the dataset, and returning the `objectId` of every nested element — an agent authors a package in one call instead of one per element. `export_package` emits a registered package's full `.ecore` (annotations, abstract classes, nsURI-based hrefs for cross-package supertypes) — the full-fidelity read `describe_eclass` cannot give. Session-scoped datasets with replayable recipes. Deny-all allow-lists on `EMFModelGuard` PID (exact / `prefix*` / `*` patterns via `NsUriPatterns`, shared with `EMFPackageRegistry`; `allowedPackages()` filters the live registry so late-registered packages match a prefix rule, and the package and class lists stay independent), registration policy + LRU cap on `EMFPackageRegistry` PID, caps on `EMFDatasetRegistry` PID. See `docs/emf-metamodel-authoring.md`. |
 | `org.eclipse.fennec.mcp.metadata.tools` | Discovery tools (9) over the EMF metadata layer (`MetadataService` / `MetadataIndexReader`): query classes/features/operations by EAnnotation across every registered package (omitting `value` matches any value for the key), resolve a bare class name, enumerate annotation sources and aspect type ids, read one element's parsed aspects with their diagnostics, and report index wiring. Identity-and-structure results, no guard — "query wide to locate, read narrow to copy". No codec dependency. See `docs/metadata-discovery-tools.md`. |
-| `org.eclipse.fennec.mcp.tool.provider` | Whiteboard aggregator: collects `MCPTool` services (dynamic — changes propagate as `notifications/tools/list_changed`), converts to MCP `AsyncToolSpecification` objects. 1-minute timeout per tool execution. |
+| `org.eclipse.fennec.mcp.tool.provider` | Whiteboard aggregator: collects `MCPTool` services (dynamic — changes propagate as `notifications/tools/list_changed`), converts to MCP `AsyncToolSpecification` objects. 1-minute timeout per tool execution. Notifies **every** server bound to it, not just the last to activate; servers add and remove their listener (`onToolsChanged` / `removeToolsChangedListener`) around their own lifecycle. |
 | `org.eclipse.fennec.mcp.service.tools` | Bridge exposing `ServiceClient` operations (imported SOAP/OpenAPI/gRPC documents from emf.util) as MCP tools. Deny-all (`clients.target` + `operations.allow`), tools carry `tool.namespace=service-bridge`. See `docs/service-client-bridge.md`. |
 | `org.eclipse.fennec.mcp.auth.jwt` | `McpTokenVerifier` validating JWTs offline against an IdP's JWKS (Keycloak etc.). See `docs/mcp-auth-keycloak.md`. |
 | `org.eclipse.fennec.mcp.http.component` | HTTP transport: `HttpMCPServerComponent` extends `AbstractHttpMCPServer` and is registered via OSGi HTTP Whiteboard as a servlet; it publishes both `MCPServer` and `MCPEndpoint` from one registration, so a client binding to `MCPEndpoint` is satisfied by this or by a `RemoteMCPEndpoint` without knowing which. |
@@ -70,6 +70,7 @@ gogo.tools  tool.provider  http.component
 | `org.eclipse.fennec.mcp.inference.runtime` | **Resolution anchor for the inference feature.** Provides `osgi.implementation=mcp.inference` and requires the closure it needs: `emf.tools`, `metadata.tools`, `inference.config`, and the model.atlas project's `model.atlas.mcp.tools` + `model.atlas.mcp.config`. One `-runrequires` on the capability turns the feature on, which is what makes `~inference`'s hard minimum of 21 safe. Its `MCPServer` reference is targeted at `(server.name=osgi-emf-inference-mcp-server)` — a runtime hosting both endpoints publishes more than one. Has `launch.bndrun` + `secrets.bndrun.template` for both tokens. |
 | `org.eclipse.fennec.mcp.inference.config` | Configurator JSON for the inference feature: `MCPToolProvider~inference` (21) and the `/mcp/inference` server with its own `auth.token` and `server.instructions`. It deliberately carries **no** `ModelAtlasPublisher` config: that PID is owned by `model.atlas.mcp.config` in the model.atlas project, which `inference.runtime` requires by identity. Two configs for one factory PID would activate two publishers, and `PostToModelAtlasTool`'s unary reference would bind an arbitrary one. Its properties come from `MODEL_ATLAS_*` / `MCP_ATLAS_PUBLISH_ALLOWLIST` (env, or system properties via `secrets.bndrun`). |
 | `org.eclipse.fennec.mcp.service.tools.tests` | OSGi integration test bundle: an imported OpenAPI document surfaces as a callable MCP tool. Runs under `./gradlew testOSGi`. |
+| `org.eclipse.fennec.mcp.http.component.tests` | OSGi integration test bundle for the HTTP endpoint: whiteboard servlet and filters accepted (not in `failedServletDTOs`), one registration publishing `MCPServer` + `MCPEndpoint`, a real MCP client doing `initialize` / `tools/list` / `tools/call` over an ephemeral port, the auth filter and `McpTokenVerifier` over the socket, dynamic tool changes on a live session, and the provider-cardinality gate. Runs under `./gradlew testOSGi`. |
 | `org.eclipse.fennec.mcp.workspace.library` | bnd workspace library: centralizes Maven dependency coordinates and runtime requirements. |
 
 ### Key Design Patterns
@@ -89,7 +90,7 @@ gogo.tools  tool.provider  http.component
 
 ### External Dependencies
 
-- `io.modelcontextprotocol.sdk` (1.1.1+) — MCP protocol SDK
+- `io.modelcontextprotocol.sdk` (2.0.0) — MCP protocol SDK, server **and** client (the client half is used by the OSGi endpoint tests)
 - `io.projectreactor:reactor-core` (3.7.0+) — Reactive streams
 - Jackson 3.x (`tools.jackson.core`) — JSON serialization
 - `org.eclipse.fennec.codec.*` — JSON schema and EMF codec
@@ -112,9 +113,12 @@ No Eclipse Platform (`org.eclipse.core.*`, `org.eclipse.ui.*`), no Xtext, no Gua
 
 ## Testing
 
-- **JUnit 5** + Mockito + AssertJ
+- **JUnit 5** + Mockito + AssertJ; `reactor-test` (`StepVerifier`) where reactive timing matters
 - `@Tag("perf")` for benchmarks (excluded from normal build, run via `perfTest` task)
-- OSGi integration tests when DS wiring verification is needed
+- OSGi integration tests when DS wiring verification is needed — `service.tools.tests` and `http.component.tests`, both under `./gradlew testOSGi`
+- An OSGi test project needing a workspace bundle only by identity in its `.bndrun` must declare `-dependson`, or a clean build resolves the runtime before that bundle is built
+- The test runtimes blacklist `spifly.dynamic.framework.extension` in favour of `spifly.dynamic.bundle` + a current `org.objectweb.asm`, for the same reason the launch runtimes do: the extension's embedded ASM stops at class file V22 and its weaving hook then kills `felix.http.jetty12` on Java 23+. Without that swap every endpoint test is skipped on a modern JVM (`AbstractMCPServerTest` aborts them with the reason rather than reporting failures)
+- `cardinality.minimum` in a Configurator JSON is written `"tools.cardinality.minimum:int"` — the `:int` is a Configurator type hint, so a `Dictionary` built by hand uses the plain key `tools.cardinality.minimum` with an `Integer`
 
 ## CI/CD
 

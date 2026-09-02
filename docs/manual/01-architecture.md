@@ -52,7 +52,11 @@ from `mcp.api`, which extends it.
 
 Because selection is by LDAP filter, one deployment can expose several
 independent MCP endpoints, and the same tool can appear in more than one of
-them. The shipped configuration uses this twice over: `gogo.runtime.config`
+them. Two providers behind the **same** server may also match one tool; the
+server then serves a single specification per name — the first — and logs a
+warning naming the tool, rather than refusing to start. A provider bound by
+several servers notifies all of them, so none is left serving the tool list it
+happened to see when it activated. The shipped configuration uses this twice over: `gogo.runtime.config`
 wires a Gogo server at `/mcp/gogo`; `emf.runtime.config` wires `~emfModel` and
 `~emfMetadata` behind the full EMF server at `/mcp/emf`; and the optional
 `inference.config` adds a third provider and a narrowed, task-scoped server at

@@ -43,6 +43,9 @@ Includes a ready-to-use **Gogo Shell MCP Server** that exposes Apache Felix Gogo
 # Run tests for a single module
 ./gradlew :org.eclipse.fennec.mcp.gogo.tools:test
 
+# OSGi integration tests (runs each test bundle in a real framework)
+./gradlew testOSGi
+
 # Coverage report
 ./gradlew codeCoverageReport
 ```
