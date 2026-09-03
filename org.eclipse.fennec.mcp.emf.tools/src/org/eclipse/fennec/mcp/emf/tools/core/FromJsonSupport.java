@@ -17,6 +17,7 @@ package org.eclipse.fennec.mcp.emf.tools.core;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Logger;
 
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
@@ -37,6 +38,8 @@ import tools.jackson.databind.json.JsonMapper;
  */
 public final class FromJsonSupport {
 
+	private static final Logger LOGGER = Logger.getLogger(FromJsonSupport.class.getName());
+
 	private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
 	private FromJsonSupport() {
@@ -50,10 +53,13 @@ public final class FromJsonSupport {
 	 * @param eClass   the (allow-listed) root class
 	 * @param data     the JSON payload as map
 	 * @param limits   the resource limits to enforce
+	 * @return what the payload contributed to the loaded graph — the caller is
+	 *         free to ignore it, but {@code create_from_json} reports it, because
+	 *         a key the codec dropped is invisible in the object count
 	 * @throws ToolException if the payload is too large, the object cap is hit
 	 *                       or the payload cannot be deserialized
 	 */
-	public static void load(Dataset dataset, String objectId, EClass eClass, Map<String, Object> data, DatasetLimits limits) {
+	public static JsonLoadReport load(Dataset dataset, String objectId, EClass eClass, Map<String, Object> data, DatasetLimits limits) {
 		byte[] payload;
 		try {
 			payload = MAPPER.writeValueAsBytes(data);
@@ -64,11 +70,13 @@ public final class FromJsonSupport {
 			throw new ToolException(String.format("JSON payload of %d bytes exceeds the limit of %d bytes",
 					payload.length, limits.maxJsonPayloadBytes()));
 		}
-		EObject root = StructuredOutputStorageHelper.loadEObject(eClass, data, dataset.getResourceSet());
+		List<String> diagnostics = new ArrayList<>();
+		EObject root = StructuredOutputStorageHelper.loadEObject(eClass, data, dataset.getResourceSet(), diagnostics);
 		if (root == null) {
 			throw new ToolException(String.format(
 					"Could not deserialize the JSON payload into a '%s'. Check the structure with describe_eclass; "
-							+ "this operation also requires the Fennec codec to be installed.", eClass.getName()));
+							+ "this operation also requires the Fennec codec to be installed.%s", eClass.getName(),
+					diagnostics.isEmpty() ? "" : " The codec reported: " + String.join("; ", diagnostics)));
 		}
 		List<EObject> children = new ArrayList<>();
 		root.eAllContents().forEachRemaining(children::add);
@@ -83,6 +91,35 @@ public final class FromJsonSupport {
 			for (EObject child : children) {
 				dataset.putObject(dataset.nextObjectId(), child);
 			}
+		}
+		// After the insert, so a report is only ever produced for a graph that is
+		// actually in the dataset; the analysis reads the tree and mutates nothing,
+		// so it needs no share of the lock above.
+		return JsonCoverage.analyse(root, data, diagnostics);
+	}
+
+	/**
+	 * Loads like {@link #load}, logging rather than returning the report.
+	 * <p>
+	 * For the replay paths ({@code manage_dataset} regenerate and
+	 * {@code replay_recipe}), which reload a payload the server itself recorded:
+	 * there the agent asked to reproduce a graph, not to check a sample, so
+	 * coverage is not part of the answer — but a recorded payload that suddenly
+	 * matches fewer features means the metamodel moved under the recipe, and that
+	 * belongs in the log rather than nowhere.
+	 *
+	 * @param dataset  the target dataset
+	 * @param objectId the dataset-local id for the root object
+	 * @param eClass   the (allow-listed) root class
+	 * @param data     the JSON payload as map
+	 * @param limits   the resource limits to enforce
+	 */
+	public static void loadAndWarn(Dataset dataset, String objectId, EClass eClass, Map<String, Object> data,
+			DatasetLimits limits) {
+		JsonLoadReport report = load(dataset, objectId, eClass, data, limits);
+		if (!report.unmatchedPaths().isEmpty()) {
+			LOGGER.warning(() -> String.format("Replayed fromJson payload for '%s' in dataset '%s': %s",
+					eClass.getName(), dataset.getId(), report.describeUnmatched()));
 		}
 	}
 }

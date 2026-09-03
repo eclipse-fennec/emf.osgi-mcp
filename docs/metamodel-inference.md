@@ -38,6 +38,26 @@ The intended flow is encoded in `server.instructions` on the server config:
 one `create_epackage` call, **validate** it by building an instance from each
 sample, then **register** and **publish**.
 
+Neither the metamodel nor the instances have to travel back through the LLM to
+be checked or handed over:
+
+- `create_from_json` answers the validation question itself. Its `coverage`
+  report names every key of the sample that matched no feature
+  (`unmatchedPaths`) and every key whose feature stayed empty
+  (`droppedPaths`); `complete: true` means the model covers the sample. The
+  agent reads that instead of exporting the XMI and comparing by eye — which
+  it did before, per sample, unreliably. `strict: true` turns unmatched keys
+  into a refusal. See *Coverage of a JSON load* in the development guide.
+- `register_package` takes a `datasetId` and a `packageObjectId`, and
+  `post_to_model_atlas` takes only the `nsURI` of an already registered
+  package. The `.ecore` is serialized and sent server-side; the agent never
+  handles the document, and cannot choose the scope, the stage or whether an
+  existing draft is replaced.
+
+`export_dataset` and `export_package` remain in the set for when the agent
+genuinely wants a serialization to read — not as the way to find out whether
+what it built is correct.
+
 ## The two runtimes are alternatives, not layers
 
 `emf.runtime` and `inference.runtime` are separate deployments and cannot both
