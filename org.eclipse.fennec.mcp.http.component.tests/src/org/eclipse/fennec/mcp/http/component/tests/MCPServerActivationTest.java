@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Dictionary;
 import java.util.Hashtable;
 import java.util.Map;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.osgi.framework.BundleContext;
+import org.osgi.framework.InvalidSyntaxException;
 import org.osgi.framework.ServiceReference;
 import org.osgi.framework.ServiceRegistration;
 import org.osgi.service.cm.Configuration;
@@ -67,6 +69,7 @@ public class MCPServerActivationTest {
 	private static final String TOOL_PROVIDER_PID = "MCPToolProvider";
 	private static final String HTTP_SERVER_PID = "HttpMCPServerComponent";
 	private static final String TEST_TOOL_NAME = "activation_probe";
+	private static final String SERVER_NAME = "activation-test-server";
 
 	/** Generous: the whiteboard, SCR and Configurator all have to settle first. */
 	private static final long SERVICE_TIMEOUT_MS = 10_000L;
@@ -149,7 +152,7 @@ public class MCPServerActivationTest {
 
 		httpServerConfig = cm.getFactoryConfiguration(HTTP_SERVER_PID, "test", "?");
 		Dictionary<String, Object> serverProperties = new Hashtable<>();
-		serverProperties.put("server.name", "activation-test-server");
+		serverProperties.put("server.name", SERVER_NAME);
 		serverProperties.put("server.full.url", "http://localhost:8085/test/mcp/message");
 		serverProperties.put("osgi.http.whiteboard.servlet.pattern", "/test/mcp/message");
 		serverProperties.put("osgi.http.whiteboard.target", "(osgi.http.endpoint=*)");
@@ -158,10 +161,16 @@ public class MCPServerActivationTest {
 		serverProperties.put("toolProviders.cardinality.minimum", 1);
 		httpServerConfig.update(serverProperties);
 
-		ServiceReference<MCPServer> serverReference = waitForServiceReference(context, MCPServer.class);
+		// Filter on this test's own server: the previous test class tears its servers down
+		// through ConfigurationAdmin, and SCR processes that asynchronously. An unfiltered
+		// lookup can still see one of those registrations and getService() on a component
+		// that is being deactivated hands back null - the very symptom this test is
+		// meant to catch for a different reason.
+		String filter = "(server.name=" + SERVER_NAME + ")";
+		ServiceReference<MCPServer> serverReference = waitForServiceReference(context, MCPServer.class, filter);
 		assertNotNull(serverReference,
-				"HttpMCPServerComponent did not register an MCPServer service within " + SERVICE_TIMEOUT_MS
-						+ " ms - check the SCR runtime for an unsatisfied reference");
+				"HttpMCPServerComponent did not register an MCPServer service matching " + filter + " within "
+						+ SERVICE_TIMEOUT_MS + " ms - check the SCR runtime for an unsatisfied reference");
 
 		// HttpMCPServerComponent is a delayed component: SCR publishes the service
 		// registration before it ever runs @Activate, so a non-null reference proves
@@ -177,13 +186,13 @@ public class MCPServerActivationTest {
 		}
 	}
 
-	private <T> ServiceReference<T> waitForServiceReference(BundleContext context, Class<T> serviceType)
-			throws InterruptedException {
+	private <T> ServiceReference<T> waitForServiceReference(BundleContext context, Class<T> serviceType,
+			String filter) throws InterruptedException, InvalidSyntaxException {
 		long deadline = System.currentTimeMillis() + SERVICE_TIMEOUT_MS;
 		while (System.currentTimeMillis() < deadline) {
-			ServiceReference<T> reference = context.getServiceReference(serviceType);
-			if (reference != null) {
-				return reference;
+			Collection<ServiceReference<T>> references = context.getServiceReferences(serviceType, filter);
+			if (references != null && !references.isEmpty()) {
+				return references.iterator().next();
 			}
 			Thread.sleep(100L);
 		}
