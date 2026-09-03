@@ -8,9 +8,10 @@ permissions:
   pages: write
   id-token: write
 
-concurrency:
-  group: pages
-  cancel-in-progress: false
+# No workflow-level concurrency here, deliberately: the reusable workflow's deploy
+# job already serialises on the job-level group `pages`. Declaring the same group
+# here makes the deploy job deadlock against its own workflow run - it is
+# cancelled before its first step (eclipse-fennec/.github#35).
 
 jobs:
   docs:
