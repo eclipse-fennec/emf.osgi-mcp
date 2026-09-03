@@ -18,7 +18,9 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 
@@ -28,6 +30,7 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.fennec.codec.config.ConfigProperty;
 import org.eclipse.fennec.codec.resource.CodecResource;
 
 import tools.jackson.databind.ObjectMapper;
@@ -67,9 +70,8 @@ public class StructuredOutputStorageHelper {
 			Resource resource = resourceSet.createResource(STRUCTURED_OUTPUT_URI);
 			EObject eClassEO = resourceSet.getEObject(URI.createURI(classUri), false);
 			Map<String, Object> options = new HashMap<>();
-//			options.put(EMFJs.OPTION_ROOT_ELEMENT, eClassEO);
 			options.put(CodecResource.CODEC_ROOT_TYPE, eClassEO);
-			options.put("useNamesFromExtendedMetadata", true);
+			options.put(ConfigProperty.USE_NAMES_FROM_EXTENDED_METADATA.getKey(), true);
 			resource.load(inputStream, options);
 			 if(!resource.getContents().isEmpty() && EcoreUtil.getURI(resource.getContents().get(0).eClass()).toString().equals(classUri)) {
 				return resource.getContents().get(0);
@@ -94,27 +96,64 @@ public class StructuredOutputStorageHelper {
 	 * @return the deserialized EObject, or {@code null} if loading fails or types don't match
 	 */
 	public static EObject loadEObject(EClass eClass, Map<String, Object> propertyMap, ResourceSet resourceSet)  {
+		return loadEObject(eClass, propertyMap, resourceSet, new ArrayList<>());
+	}
+
+	/**
+	 * Deserializes a property map into an EMF EObject, collecting the codec's own
+	 * load diagnostics into the given list.
+	 * <p>
+	 * Overload of {@link #loadEObject(EClass, Map, ResourceSet)} for callers that
+	 * have to report <i>why</i> a load produced nothing, or that a load succeeded
+	 * while the codec still complained. The plain overload discards those
+	 * diagnostics, which makes a partially applied payload indistinguishable from
+	 * a clean one.
+	 *
+	 * @param eClass         the target EClass for deserialization
+	 * @param propertyMap    the key-value map to deserialize
+	 * @param resourceSet    the resource set used for loading
+	 * @param diagnosticsOut collects the messages of {@link Resource#getErrors()}
+	 *                       and {@link Resource#getWarnings()}, plus the message of
+	 *                       an {@link IOException}; never cleared, only appended to
+	 * @return the deserialized EObject, or {@code null} if loading fails or types don't match
+	 */
+	public static EObject loadEObject(EClass eClass, Map<String, Object> propertyMap, ResourceSet resourceSet,
+			List<String> diagnosticsOut) {
 		try {
 			String jsonString = mapToJsonString(propertyMap);
 			InputStream inputStream = stringToInputStream(jsonString);
 			Resource resource = resourceSet.createResource(STRUCTURED_OUTPUT_URI);
 			Map<String, Object> options = new HashMap<>();
-//			options.put(EMFJs.OPTION_ROOT_ELEMENT, eClass);
 			options.put(CodecResource.CODEC_ROOT_TYPE, eClass);
-			options.put("useNamesFromExtendedMetadata", true);
+			options.put(ConfigProperty.USE_NAMES_FROM_EXTENDED_METADATA.getKey(), true);
 			resource.load(inputStream, options);
+			collectDiagnostics(resource, diagnosticsOut);
 			 if(!resource.getContents().isEmpty() && resource.getContents().get(0).eClass().equals(eClass)) {
 				return resource.getContents().get(0);
 			}
 
 		} catch (IOException e) {
 			LOGGER.severe(String.format("IOException when trying to load structured output into known EObject of EClass %s", eClass.getName()));
-			e.printStackTrace();
+			diagnosticsOut.add(e.getMessage() == null ? e.toString() : e.getMessage());
 		}
 		return null;
 
 	}
-	
+
+	/**
+	 * Appends the resource's error and warning messages to the given list. A codec
+	 * that cannot place a value reports it here and nowhere else, so a caller that
+	 * never reads them cannot tell a complete load from a lossy one.
+	 */
+	private static void collectDiagnostics(Resource resource, List<String> diagnosticsOut) {
+		for (Resource.Diagnostic diagnostic : resource.getErrors()) {
+			diagnosticsOut.add(diagnostic.getMessage());
+		}
+		for (Resource.Diagnostic diagnostic : resource.getWarnings()) {
+			diagnosticsOut.add(diagnostic.getMessage());
+		}
+	}
+
 	private static InputStream stringToInputStream(String jsonString) {
 		// Wrap the string bytes in a ByteArrayInputStream, using UTF-8 encoding
 		return new ByteArrayInputStream(jsonString.getBytes(StandardCharsets.UTF_8));

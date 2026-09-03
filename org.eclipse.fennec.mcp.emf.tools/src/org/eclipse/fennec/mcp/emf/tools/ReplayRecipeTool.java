@@ -100,7 +100,7 @@ public class ReplayRecipeTool extends AbstractEMFTool {
 			String sessionId = sessionId(exchange);
 			Dataset dataset = registry.create(sessionId, optionalLong(arguments, "seed"));
 			ModelOperations.replay(dataset, recipe, guard.resolverFor(sessionId), registry.limits(),
-					(ds, objectId, eClass, data) -> FromJsonSupport.load(ds, objectId, eClass, data, registry.limits()));
+					(ds, objectId, eClass, data) -> FromJsonSupport.loadAndWarn(ds, objectId, eClass, data, registry.limits()));
 			recipe.forEach(dataset::record);
 			return Map.of(
 					"datasetId", dataset.getId(),

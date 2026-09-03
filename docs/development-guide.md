@@ -519,7 +519,43 @@ Two consequences worth knowing:
 | `create_instance` | New instance of an allow-listed EClass → `objectId` |
 | `modify_feature` | `set`/`unset`/`add`/`remove` one structural feature |
 | `delete_instance` | Remove an object incl. containment subtree and references |
-| `create_from_json` | Whole instance graph from one JSON payload (via Fennec codec) |
+| `create_from_json` | Whole instance graph from one JSON payload (via Fennec codec), plus a `coverage` report of what the payload did *not* contribute |
+
+#### Coverage of a JSON load
+
+The codec drops a JSON key that matches no structural feature without saying
+so, and `objectCount` cannot stand in for the missing signal: a payload whose
+leaf attributes all vanished still produces the expected number of objects.
+`create_from_json` therefore returns a `coverage` report next to the ack:
+
+| Field | Meaning |
+|-------|---------|
+| `complete` | every key landed on a feature that holds a value, and the codec reported nothing |
+| `matchedKeys` | keys that resolved to a structural feature |
+| `unmatchedCount` / `unmatchedPaths` | keys that resolved to no feature — the model is narrower than the payload |
+| `droppedCount` / `droppedPaths` | keys that resolved to a feature which is empty afterwards |
+| `unsetFeatureCount` / `unsetFeatures` | `Class.feature` entries no key mentioned — the model is wider than the payload; a hint, not a defect |
+| `codecDiagnostics` | messages the codec itself reported for the load |
+| `truncated` | a list hit the 50-entry reporting cap; the counts stay exact |
+
+Empty lists are omitted, so a clean load is three short fields. Pass
+`strict: true` to have the call refuse — and delete the dataset it had already
+built — instead of reporting unmatched keys.
+
+The analysis lives in `core/JsonCoverage` and takes an already-built `EObject`
+tree, deliberately independent of the codec: a "the codec dropped this" claim
+has to be provably correct, so it is unit-tested against hand-built models
+rather than against codec output. It **under-reports by design** in two places:
+a key is matched if it equals either the feature's plain name or its
+`ExtendedMetaData` wire name (the codec may accept only one, but a false
+"unmatched" claim is the one an agent cannot recover from), and an attribute
+that fell back to its type default (`0`, `false`) is not flagged as dropped,
+being indistinguishable from a deliberate default.
+
+The replay paths (`manage_dataset` regenerate, `replay_recipe`) reload a payload
+the server recorded itself, so coverage is not part of their answer — but a
+recorded payload that suddenly matches fewer features means the metamodel moved
+under the recipe, and `FromJsonSupport.loadAndWarn` logs that server-side.
 
 **Metamodel authoring**
 

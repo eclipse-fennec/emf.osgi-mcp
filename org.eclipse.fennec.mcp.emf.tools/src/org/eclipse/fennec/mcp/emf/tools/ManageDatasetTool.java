@@ -87,7 +87,7 @@ public class ManageDatasetTool extends AbstractEMFTool {
 				List<RecipeOp> recipe = dataset.recipeSnapshot();
 				dataset.clearObjects();
 				ModelOperations.replay(dataset, recipe, guard, registry.limits(),
-						(ds, objectId, eClass, data) -> FromJsonSupport.load(ds, objectId, eClass, data, registry.limits()));
+						(ds, objectId, eClass, data) -> FromJsonSupport.loadAndWarn(ds, objectId, eClass, data, registry.limits()));
 				return Map.of(
 						"datasetId", datasetId,
 						"action", action,
