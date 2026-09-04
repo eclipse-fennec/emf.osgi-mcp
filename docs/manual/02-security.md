@@ -29,6 +29,14 @@ Without `org.apache.felix.http.host` the Jetty default is to bind **all**
 interfaces (`0.0.0.0`). Keeping it on localhost means the example runtime is not
 reachable from the network out of the box.
 
+The one shipped exception is the **inference container image**. Its
+`org.apache.felix.http~inference` host is a `$[env:MCP_INFERENCE_HTTP_HOST]`
+placeholder, defaulting to `127.0.0.1` for a local run and set to `0.0.0.0` in
+the image: loopback inside a container is reachable only from inside it, so a
+container keeping the default would publish a port that answers nothing. That is
+exactly why a token is **mandatory** there and not optional — see
+[metamodel-inference.md](../metamodel-inference.md#running-it-in-a-container).
+
 ## Authentication — the `McpAuthenticationFilter`
 
 `AbstractHttpMCPServer` registers an `McpAuthenticationFilter` on the OSGi HTTP
@@ -141,7 +149,8 @@ your deployment, do not deploy the bundle. See
 ## Checklist before exposing a server
 
 - [ ] Keep `org.apache.felix.http.host` on `127.0.0.1`, or front the endpoint
-      with an authenticating reverse proxy.
+      with an authenticating reverse proxy. A container binds `0.0.0.0` out of
+      necessity — set its `auth.token` in the same step, not later.
 - [ ] Set a strong `auth.token` if the endpoint must be reachable remotely.
 - [ ] Do not deploy the Gogo server in production.
 - [ ] For the EMF server, allow-list only the metamodels you intend to expose,

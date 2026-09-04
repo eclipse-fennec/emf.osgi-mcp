@@ -165,6 +165,26 @@ one would log readiness for the wrong endpoint.
 the two expose very different amounts of the runtime. Exposure rules are the
 same as for every other endpoint — see [manual/02-security.md](manual/02-security.md).
 
+The listener it binds to comes from the same bundle, and its host is a
+placeholder rather than a literal:
+
+```json
+"org.apache.felix.http~inference": {
+    "org.osgi.service.http.port:int": 8099,
+    "org.apache.felix.http.host": "$[env:MCP_INFERENCE_HTTP_HOST;default=$[prop:MCP_INFERENCE_HTTP_HOST;default=127.0.0.1]]",
+    "org.apache.felix.http.name": "inference"
+}
+```
+
+The default keeps a local run loopback-only, which is what makes an unset
+`auth.token` safe there. A container has to bind `0.0.0.0` — `127.0.0.1` inside
+a container is reachable only from inside it, so the published port would answer
+nothing — and the image sets `MCP_INFERENCE_HTTP_HOST=0.0.0.0` for that reason.
+That single change makes the token **mandatory**: a request from the host or
+another container arrives from the docker gateway rather than from loopback, so
+a tokenless endpoint answers `401` to everything. See
+[Running it in a container](#running-it-in-a-container).
+
 ### The publisher
 
 Configured from `model.atlas.mcp.config`, every value interpolated so one bundle
@@ -182,6 +202,21 @@ Keep `stage` a **draft** stage. Promotion to a released stage is a human
 decision made in model.atlas, not something an MCP tool should reach. Likewise
 `overwrite` stays `false` so a 409 keeps its meaning: the namespace is taken, and
 the answer is a free namespace rather than a retry with a flag flipped.
+
+### The read client
+
+The discovery tools read EPackages through
+`org.eclipse.fennec.model.atlas.rest.client~jena`, configured in
+`emf.runtime.config.atlas`. Its `base.uri` interpolates
+**`MODEL_ATLAS_BASE_URI`** — deliberately the same variable the publisher above
+reads for its own `base.uri`. A deployment reads the EPackages of, and publishes
+back to, one atlas, so one value configures both directions; the default points
+at where model.atlas's `docker-compose-jena.yml` puts a local container, which
+keeps a local run working with nothing set.
+
+The `eager.scopes` below it stay literal. The overlay exists to name the `jena`
+scope on the read side, and which scope is *published* into is a separate
+decision (`MODEL_ATLAS_PUBLISHING_SCOPE`).
 
 ### How interpolation actually works
 
@@ -323,6 +358,51 @@ bundle, build it in model.atlas, drop the jar into `cnf/local`, re-index that
 repository and re-resolve; remember to undo that once the change is published,
 so the runtime stops resolving against a jar only your checkout has.
 
+## Running it in a container
+
+The feature also ships as an image, tagged `inference-snapshot` /
+`inference-latest` plus `inference-<bundle version>` on both
+`docker.io/eclipsefennec/emf.osgi-mcp` and `ghcr.io/eclipse-fennec/emf.osgi-mcp`.
+The variant is in the tag because this repository can produce more than one
+runtime image. Build context, compose example and the full environment table
+live in
+[`docker/inference/README.md`](https://github.com/eclipse-fennec/emf.osgi-mcp/blob/main/docker/inference/README.md);
+the parts that change how the feature behaves are:
+
+- **The token stops being optional.** The image binds `0.0.0.0`, so no caller is
+  loopback any more and the endpoint answers `401` until
+  `MCP_INFERENCE_AUTH_TOKEN` is set. Exposing it and giving it a token are one
+  step, not two.
+- **`MODEL_ATLAS_BASE_URI` has no usable default.** `http://localhost:8080` is
+  the container itself. A model.atlas container on the host is
+  `http://host.docker.internal:8080/atlas/rest` with
+  `extra_hosts: ["host.docker.internal:host-gateway"]`; on the same compose
+  network it is `http://<service-name>:8080/atlas/rest`.
+- **The fail-closed behaviour above is what you hit first.** A blank
+  `MODEL_ATLAS_BASE_URI` or `MODEL_ATLAS_PUBLISHING_SCOPE` keeps
+  `post_to_model_atlas` unregistered, and `/mcp/inference` then never comes up
+  — in a container with nothing on stdout saying why. The `:?` forms in the
+  example compose file turn that into a readable `up` failure.
+- **`EMFModelGuard` and `EMFPackageRegistry` are baked in.** Those two
+  allow-lists are literal in `inference.config`, not environment-driven:
+  authoring under other namespaces needs a rebuild or a derived image. They are
+  deny-all security lists, and one a stray environment variable can widen is a
+  weaker guarantee. `MCP_ATLAS_PUBLISH_ALLOWLIST` is the exception and *is*
+  environment-driven.
+
+The image is distroless and has no shell, so probe it from the host — an MCP
+`initialize` proves the servlet, the filter and the tool provider all came up:
+
+```bash
+curl -sS -X POST http://localhost:8099/mcp/inference \
+  -H "Authorization: Bearer $MCP_INFERENCE_AUTH_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{
+        "protocolVersion":"2025-06-18","capabilities":{},
+        "clientInfo":{"name":"smoke","version":"1"}}}'
+```
+
 ## Symptom to cause
 
 | Symptom | Cause |
@@ -330,6 +410,8 @@ so the runtime stops resolving against a jar only your checkout has.
 | `osgi.implementation=mcp.inference cannot be resolved` naming a bundle you never requested | that identity requirement is compiled into `MCPServerActivator`'s manifest; fix the annotation, rebuild, re-resolve |
 | `/mcp/inference` never comes up, no obvious error | one of the 20 tools is missing — most often `post_to_model_atlas`, because the publisher refused to activate on a blank `base.uri` or `scope` |
 | `resolve` fails on `secrets.bndrun` | use `resolve.launch` |
+| `401` from a container, token set on the command line | the token reached compose but not the process, or it does not match; a container never gets the loopback exemption |
+| Connection refused against a running container | `MCP_INFERENCE_HTTP_HOST` is not `0.0.0.0`, so the servlet bound loopback inside the container |
 | Publishing refused: "namespace is not publishable" | `publish.nsuri.allowlist` — check the pipe separator survived bnd's comma splitting (`jcmd <pid> VM.system_properties \| grep MCP_ATLAS`) |
 | Publishing refused: "no package is registered under …" | `register_package` has not accepted it; check `EMFPackageRegistry.nsuri.allowlist` |
 | Only the first namespace of the allow-list works | the value was comma-separated, or quoted around the value instead of around the whole `-D` argument, leaving literal `'` in the outer rules |

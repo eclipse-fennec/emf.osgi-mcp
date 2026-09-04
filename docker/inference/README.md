@@ -129,9 +129,13 @@ The exported jar also runs outside docker, which is the quickest way to check a 
 (it binds loopback there, so no token is needed):
 
 ```bash
-java -Dgosh.args=--nointeractive -jar \
+java -jar \
   org.eclipse.fennec.mcp.inference.runtime/generated/distributions/executable/inference.runtime_docker.jar
 ```
+
+No `-Dgosh.args=--nointeractive` is needed: it is a `-runproperty` in
+`inference.runtime_docker.bndrun`, so the shell stays non-interactive however the jar is
+started — which is also why the image's `ENTRYPOINT` does not pass it.
 
 Re-resolve after changing `-runrequires`. `inference.runtime_docker.bndrun` is kept in sync
 with `launch.bndrun` — identical requirements, therefore an identical `-runbundles` — so a
