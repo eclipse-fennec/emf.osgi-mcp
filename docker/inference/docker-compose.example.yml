@@ -1,0 +1,62 @@
+# Copyright (c) 2026 Contributors to the Eclipse Foundation.
+#
+# This program and the accompanying materials are made
+# available under the terms of the Eclipse Public License 2.0
+# which is available at https://www.eclipse.org/legal/epl-2.0/
+#
+# SPDX-License-Identifier: EPL-2.0
+
+# Runnable example: the metamodel-inference MCP endpoint pointed at a deployed Model Atlas.
+#
+#   cp docker/inference/.env.example docker/inference/.env   # then fill it in
+#   docker compose -f docker/inference/docker-compose.example.yml up
+#
+# Build the image first (README.md, "Building locally") or replace the `image:` with the
+# published one: docker.io/eclipsefennec/emf.osgi-mcp:inference-snapshot
+#
+# The Atlas is NOT a service here: this runtime publishes to an atlas someone else operates,
+# and a local one would need model.atlas's own configs/jena.json to have a scope to publish
+# into at all. To run one yourself, bring up docker-compose-jena.yml from the model.atlas
+# repo and point MODEL_ATLAS_BASE_URI at it - see README.md ("Reaching the Model Atlas").
+services:
+
+  inference-mcp:
+    image: fennec-mcp-inference:local
+
+    # Every value comes from docker/inference/.env (see .env.example). The `:?` forms fail
+    # `up` with a readable message instead of starting a runtime that cannot come up: a blank
+    # base.uri or scope makes ModelAtlasPublisher refuse to activate, so post_to_model_atlas
+    # is never registered, so MCPToolProvider~inference sits at 19 of its required 20 tools -
+    # and /mcp/inference then does not come up at all, with nothing on stdout saying why.
+    environment:
+      # Guards /mcp/inference. Mandatory in a container: the endpoint binds 0.0.0.0 here, and
+      # a request from outside arrives from the docker gateway rather than from loopback, so
+      # without a token every call is refused with 401. See README.md ("Authentication").
+      MCP_INFERENCE_AUTH_TOKEN: ${MCP_INFERENCE_AUTH_TOKEN:?set it in docker/inference/.env}
+
+      # One value for both directions: the atlas whose EPackages the discovery tools read,
+      # and the atlas post_to_model_atlas publishes back to.
+      MODEL_ATLAS_BASE_URI: ${MODEL_ATLAS_BASE_URI:?set it in docker/inference/.env}
+      MODEL_ATLAS_PUBLISHING_SCOPE: ${MODEL_ATLAS_PUBLISHING_SCOPE:?set it in docker/inference/.env}
+
+      # Optional, with defaults that stay conservative: publish as a draft, never replace an
+      # existing one. Widen deliberately.
+      MODEL_ATLAS_PUBLISHING_STAGE: ${MODEL_ATLAS_PUBLISHING_STAGE:-draft}
+      MODEL_ATLAS_OVERWRITE: ${MODEL_ATLAS_OVERWRITE:-false}
+
+      # '|'-separated, deny-all: a namespace no rule admits cannot be published. A pipe and
+      # not a comma because a comma-separated value is split by bnd on the -runvm path this
+      # shares with a local run.
+      MCP_ATLAS_PUBLISH_ALLOWLIST: ${MCP_ATLAS_PUBLISH_ALLOWLIST:?set it in docker/inference/.env}
+
+    ports:
+      # 8099 is the container-side port the `inference` whiteboard binds; remap the left side
+      # freely. The endpoint is POST /mcp/inference - it speaks MCP over HTTP, so there is
+      # nothing to open in a browser.
+      - "8099:8099"
+
+    # No healthcheck: the image is distroless and carries no shell, curl or wget, so there is
+    # nothing in it to run a probe with. An MCP `initialize` from the host is the real check -
+    # README.md ("Smoke test") has the one-liner.
+
+    restart: unless-stopped

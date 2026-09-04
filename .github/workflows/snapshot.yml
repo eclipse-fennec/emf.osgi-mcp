@@ -6,12 +6,14 @@ on:
       - snapshot
 
 # Workflow-level ceiling for the called reusables. Only the docs deploy needs the
-# pages/id-token scopes; the credential-scoped release step gets its secrets via
-# `secrets: inherit` below (verify + docs never see them).
+# pages/id-token scopes; the credential-scoped release and container steps get their secrets
+# via `secrets: inherit` below (verify + docs never see them); packages: write is needed for
+# the GHCR image push.
 permissions:
   contents: read
   pages: write
   id-token: write
+  packages: write
 
 concurrency:
   group: snapshot-publish
@@ -26,6 +28,24 @@ jobs:
     uses: eclipse-fennec/.github/.github/workflows/reusable-release.yml@9292fbff296548018fa9e4b0f6ad49ba7c639501 # v1.1.1
     with:
       do-release: false
+      # bnd resolve/export tasks are not parallel-safe in this workspace.
+      gradle-parallel: false
+      # Export the docker runtime jar in the SAME build that publishes to Maven, and hand it
+      # to the container job as the release-jars artifact - so the image embeds exactly the
+      # jar that was released.
+      extra-gradle-tasks: >-
+        org.eclipse.fennec.mcp.inference.runtime:export.inference.runtime_docker
+      artifact-paths: |
+        org.eclipse.fennec.mcp.inference.runtime/generated/distributions/executable/inference.runtime_docker.jar
+        org.eclipse.fennec.mcp.inference.runtime/generated/org.eclipse.fennec.mcp.inference.runtime.jar
+    secrets: inherit
+
+  container:
+    needs: release
+    uses: ./.github/workflows/reusable-container.yml
+    with:
+      docker-label: snapshot
+      variant: inference
     secrets: inherit
 
   docs:

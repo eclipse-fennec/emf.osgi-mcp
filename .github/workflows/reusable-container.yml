@@ -1,0 +1,148 @@
+name: Reusable Container Deploy
+
+# Repo-local reusable: builds/pushes one MCP runtime image to Docker Hub and GHCR.
+#
+# This repository can produce more than one image - today the inference endpoint, later the
+# base EMF one - so both registries hold a single `emf.osgi-mcp` repository and the variant
+# lives in the TAG: `emf.osgi-mcp:inference-snapshot`, the way model.atlas tags
+# `model.atlas:jena-snapshot`. Adding the second image is then one more caller job with a
+# different `variant`, not a second workflow.
+#
+# Every path is derived from `variant` by the workspace's own naming convention:
+#
+#   docker context   docker/<variant>/
+#   runtime jar      <variant>.runtime_docker.jar
+#   version source   org.eclipse.fennec.mcp.<variant>.runtime.jar
+#
+# The two jars are located by NAME inside the downloaded artifact rather than by the path the
+# caller uploaded them from: actions/upload-artifact roots its archive at the least common
+# ancestor of the paths it is given, so that layout depends on how many projects the caller
+# happened to list and is not something this job can reconstruct.
+#
+# The runtime jar is NOT rebuilt here - it is downloaded from the "release-jars" artifact
+# uploaded by reusable-release (eclipse-fennec/.github v1.1.0+: extra-gradle-tasks and
+# artifact-paths inputs), so the image embeds exactly the jar that was built alongside the
+# Maven publish rather than a re-export of it. The moving tag label (snapshot vs latest)
+# comes from the calling workflow.
+on:
+  workflow_call:
+    inputs:
+      docker-label:
+        description: 'Moving docker tag label, e.g. snapshot or latest.'
+        type: string
+        required: true
+      variant:
+        description: 'Runtime variant; names the docker context, the jar and the tag prefix. Currently only "inference".'
+        type: string
+        required: false
+        default: inference
+    secrets:
+      DOCKER_USERNAME:
+        required: true
+      DOCKER_API_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  LC_ALL: en_US.UTF-8
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  container:
+    name: Container Deploy (${{ inputs.variant }}-${{ inputs.docker-label }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+      - name: Git Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Set up JDK 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Download Release Artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-jars
+          # A directory of its own, not the workspace root: what arrives is NOT the
+          # `<project>/generated/...` tree the caller listed. upload-artifact strips the least
+          # common ancestor of the uploaded paths, so with both jars under one project the
+          # archive holds `distributions/executable/<jar>` plus the bundle jar - and adding a
+          # second variant to the caller would move that ancestor again. The steps below
+          # therefore search this tree by file name.
+          path: /tmp/release-jars
+      - name: Install bnd
+        run: |
+          # No -k: this jar is executed below, so the transport is verified and the digest
+          # pins the exact artifact rather than trusting whatever the URL serves that day.
+          curl -fsSL -o /tmp/biz.aQute.bnd.jar \
+            https://repo1.maven.org/maven2/biz/aQute/bnd/biz.aQute.bnd/7.2.1/biz.aQute.bnd-7.2.1.jar
+          echo "4a84ebfcb613ca83334d963433f279dbe717d0df918288ebee39b0fd635f57a8  /tmp/biz.aQute.bnd.jar" \
+            | sha256sum -c -
+      - name: Extract Bundle Version
+        id: bundle_version
+        # Via env rather than inline expansion, so the input never reaches the shell as code.
+        env:
+          VARIANT: ${{ inputs.variant }}
+        run: |
+          BUNDLE_JAR=$(find /tmp/release-jars -name "org.eclipse.fennec.mcp.${VARIANT}.runtime.jar" -print -quit)
+          # Both guards fail the job here rather than let an empty version build the tag
+          # `emf.osgi-mcp:${VARIANT}-`, which is rejected further along and further from the
+          # cause. The bnd call keeps its stderr for the same reason.
+          [ -n "${BUNDLE_JAR}" ] || { echo "::error::org.eclipse.fennec.mcp.${VARIANT}.runtime.jar is not in the release-jars artifact"; exit 1; }
+          VERSION=$(java -jar /tmp/biz.aQute.bnd.jar select -h Bundle-Version "${BUNDLE_JAR}" | head -1)
+          [ -n "${VERSION}" ] || { echo "::error::no Bundle-Version header in ${BUNDLE_JAR}"; exit 1; }
+          echo "VERSION=${VERSION}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+      - name: Prepare Docker content
+        env:
+          VARIANT: ${{ inputs.variant }}
+        run: |
+          # The Dockerfile expects exactly one file in content/: the executable runtime. No
+          # model or mapping directories to stage - this runtime authors metamodels rather
+          # than reading them off disk.
+          RUNTIME_JAR=$(find /tmp/release-jars -name "${VARIANT}.runtime_docker.jar" -print -quit)
+          [ -n "${RUNTIME_JAR}" ] || { echo "::error::${VARIANT}.runtime_docker.jar is not in the release-jars artifact"; exit 1; }
+          mkdir -p "docker/${VARIANT}/content"
+          cp "${RUNTIME_JAR}" "docker/${VARIANT}/content/${VARIANT}.runtime_docker.jar"
+          ls -lR "docker/${VARIANT}/content"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - name: Login to Docker Hub
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_API_TOKEN }}
+      - name: Login to Github Docker Registry
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: docker/${{ inputs.variant }}/
+          platforms: linux/amd64,linux/arm64/v8
+          push: true
+          # Set deliberately rather than left to the buildx default: both registries keep the
+          # attestations as extra manifest entries, which is what the `unknown/unknown`
+          # platforms in the published index are.
+          provenance: mode=max
+          sbom: true
+          tags: |-
+            docker.io/eclipsefennec/emf.osgi-mcp:${{ inputs.variant }}-${{ inputs.docker-label }}
+            docker.io/eclipsefennec/emf.osgi-mcp:${{ inputs.variant }}-${{ steps.bundle_version.outputs.version }}
+            ghcr.io/eclipse-fennec/emf.osgi-mcp:${{ inputs.variant }}-${{ inputs.docker-label }}
+            ghcr.io/eclipse-fennec/emf.osgi-mcp:${{ inputs.variant }}-${{ steps.bundle_version.outputs.version }}

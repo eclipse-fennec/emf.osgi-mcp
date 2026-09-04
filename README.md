@@ -31,7 +31,7 @@ Includes a ready-to-use **Gogo Shell MCP Server** that exposes Apache Felix Gogo
 | `org.eclipse.fennec.mcp.http.component` | HTTP transport via OSGi HTTP Whiteboard servlet |
 | `org.eclipse.fennec.mcp.gogo.runtime` (`.config`) | The Gogo server — activator and Configurator config (port 8088, `/mcp/gogo`) |
 | `org.eclipse.fennec.mcp.emf.runtime` (`.config`, `.config.atlas`) | The EMF server (port 8099, `/mcp/emf`), with an optional overlay for reading model.atlas-hosted packages |
-| `org.eclipse.fennec.mcp.inference.runtime` (`.config`) | Optional metamodel-inference feature (`/mcp/inference`) — a resolution anchor plus its configuration |
+| `org.eclipse.fennec.mcp.inference.runtime` (`.config`) | Optional metamodel-inference feature (`/mcp/inference`) — a resolution anchor plus its configuration, also published as a container image |
 | `org.eclipse.fennec.mcp.workspace.library` | bnd workspace library with Maven dependency coordinates |
 
 ## Build
@@ -61,8 +61,12 @@ The framework uses the **OSGi Whiteboard Pattern**:
 3. `HttpMCPServerComponent` consumes tool providers and exposes them as an MCP HTTP endpoint
 
 Because selection is by filter, one runtime can serve several endpoints from the
-same tools — the inference runtime does exactly that, exposing the full tool set
-at `/mcp/emf` and a task-scoped subset at `/mcp/inference`. Note that
+same tools — the EMF runtime does exactly that, publishing one provider for the
+28 model tools and another for the 9 discovery tools behind `/mcp/emf`. The
+inference runtime is the other shape: the same tool bundles, filtered down to a
+task-scoped 20 behind `/mcp/inference`, and deliberately *not* serving
+`/mcp/emf` — the two config bundles define the same singleton PIDs and bind the
+same port, so they are alternative runtimes rather than layers. Note that
 `tools.cardinality.minimum` is a hard gate: an unmet minimum prevents the
 component from activating rather than degrading it.
 
@@ -84,6 +88,8 @@ MCPTool services → MCPToolProvider (aggregator) → HttpMCPServerComponent (HT
 - **[Metamodel Authoring](docs/emf-metamodel-authoring.md)** — Author Ecore metamodels over MCP: the tool set, composite one-call authoring, the session registry and its configuration
 - **[Metadata Discovery](docs/metadata-discovery-tools.md)** — Locate a model by its EAnnotations across every registered package, before you model anything new
 - **[Keycloak Authentication](docs/mcp-auth-keycloak.md)** — Per-client expiring JWT bearer tokens for the MCP endpoint
+- **[Metamodel Inference](docs/metamodel-inference.md)** — The task-scoped `/mcp/inference` endpoint: infer an Ecore metamodel from sample payloads and publish it to a Model Atlas
+- **[Inference container image](docker/inference/README.md)** — Running that endpoint from `emf.osgi-mcp:inference-snapshot`: ports, environment, and why its bearer token is mandatory
 
 ## Extending
 
