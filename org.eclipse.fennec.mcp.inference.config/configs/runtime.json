@@ -1,8 +1,9 @@
 {
     ":configurator:resource-version": 1,
+    "_comment": "The whiteboard this runtime's /mcp/inference servlet binds to. The host is a placeholder rather than a literal because a container has to bind 0.0.0.0 - 127.0.0.1 inside a container is reachable only from inside it, so the published port would answer nothing. The default keeps a local run loopback-only, which is what makes an unset auth.token safe there: McpAuthenticationFilter trusts a direct loopback caller and nothing else. Set MCP_INFERENCE_HTTP_HOST=0.0.0.0 in the image (docker/inference/Dockerfile does) and set a token with it - from outside the container a request arrives from the docker gateway, not from loopback, so a tokenless endpoint answers 401 rather than serving anyone.",
     "org.apache.felix.http~inference": {
         "org.osgi.service.http.port:int": 8099,
-        "org.apache.felix.http.host": "127.0.0.1",
+        "org.apache.felix.http.host": "$[env:MCP_INFERENCE_HTTP_HOST;default=$[prop:MCP_INFERENCE_HTTP_HOST;default=127.0.0.1]]",
         "org.apache.felix.http.name": "inference"
     }
 }

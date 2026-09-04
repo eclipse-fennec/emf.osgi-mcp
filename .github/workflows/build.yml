@@ -22,3 +22,11 @@ concurrency:
 jobs:
   verify:
     uses: eclipse-fennec/.github/.github/workflows/reusable-verify.yml@9292fbff296548018fa9e4b0f6ad49ba7c639501 # v1.1.1
+    with:
+      # bnd resolve/export tasks are not parallel-safe in this workspace.
+      gradle-parallel: false
+      # Prove the docker bndrun still exports before a release build depends on it:
+      # an export fails when a -runbundle cannot be found, which is what a renamed or
+      # dropped bundle looks like. Nothing is pushed from here.
+      extra-gradle-tasks: >-
+        org.eclipse.fennec.mcp.inference.runtime:export.inference.runtime_docker

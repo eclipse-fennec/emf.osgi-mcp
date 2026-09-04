@@ -1,0 +1,118 @@
+name: Reusable Container Deploy
+
+# Repo-local reusable: builds/pushes one MCP runtime image to Docker Hub and GHCR.
+#
+# This repository can produce more than one image - today the inference endpoint, later the
+# base EMF one - so both registries hold a single `emf.osgi-mcp` repository and the variant
+# lives in the TAG: `emf.osgi-mcp:inference-snapshot`, the way model.atlas tags
+# `model.atlas:jena-snapshot`. Adding the second image is then one more caller job with a
+# different `variant`, not a second workflow.
+#
+# Every path is derived from `variant` by the workspace's own naming convention:
+#
+#   docker context   docker/<variant>/
+#   runtime jar      org.eclipse.fennec.mcp.<variant>.runtime/generated/distributions/executable/<variant>.runtime_docker.jar
+#   version source   org.eclipse.fennec.mcp.<variant>.runtime/generated/org.eclipse.fennec.mcp.<variant>.runtime.jar
+#
+# The runtime jar is NOT rebuilt here - it is downloaded from the "release-jars" artifact
+# uploaded by reusable-release (eclipse-fennec/.github v1.1.0+: extra-gradle-tasks and
+# artifact-paths inputs), so the image embeds exactly the jar that was built alongside the
+# Maven publish rather than a re-export of it. The moving tag label (snapshot vs latest)
+# comes from the calling workflow.
+on:
+  workflow_call:
+    inputs:
+      docker-label:
+        description: 'Moving docker tag label, e.g. snapshot or latest.'
+        type: string
+        required: true
+      variant:
+        description: 'Runtime variant; names the docker context, the jar and the tag prefix. Currently only "inference".'
+        type: string
+        required: false
+        default: inference
+    secrets:
+      DOCKER_USERNAME:
+        required: true
+      DOCKER_API_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  LC_ALL: en_US.UTF-8
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  container:
+    name: Container Deploy (${{ inputs.variant }}-${{ inputs.docker-label }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+      - name: Git Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Set up JDK 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Download Release Artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-jars
+          path: .
+      - name: Install bnd
+        run: |
+          curl -Lk -o /tmp/biz.aQute.bnd.jar \
+            https://repo1.maven.org/maven2/biz/aQute/bnd/biz.aQute.bnd/7.2.1/biz.aQute.bnd-7.2.1.jar
+      - name: Extract Bundle Version
+        id: bundle_version
+        run: |
+          VERSION=$(java -jar /tmp/biz.aQute.bnd.jar select -h Bundle-Version \
+            "org.eclipse.fennec.mcp.${{ inputs.variant }}.runtime/generated/org.eclipse.fennec.mcp.${{ inputs.variant }}.runtime.jar" \
+            2>/dev/null | head -1)
+          echo "VERSION=${VERSION}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+      - name: Prepare Docker content
+        run: |
+          # The Dockerfile expects exactly one file in content/: the executable runtime. No
+          # model or mapping directories to stage - this runtime authors metamodels rather
+          # than reading them off disk.
+          mkdir -p "docker/${{ inputs.variant }}/content"
+          cp "org.eclipse.fennec.mcp.${{ inputs.variant }}.runtime/generated/distributions/executable/${{ inputs.variant }}.runtime_docker.jar" \
+             "docker/${{ inputs.variant }}/content/${{ inputs.variant }}.runtime_docker.jar"
+          ls -lR "docker/${{ inputs.variant }}/content"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - name: Login to Docker Hub
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_API_TOKEN }}
+      - name: Login to Github Docker Registry
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: docker/${{ inputs.variant }}/
+          platforms: linux/amd64,linux/arm64/v8
+          push: true
+          tags: |-
+            docker.io/eclipsefennec/emf.osgi-mcp:${{ inputs.variant }}-${{ inputs.docker-label }}
+            docker.io/eclipsefennec/emf.osgi-mcp:${{ inputs.variant }}-${{ steps.bundle_version.outputs.version }}
+            ghcr.io/eclipse-fennec/emf.osgi-mcp:${{ inputs.variant }}-${{ inputs.docker-label }}
+            ghcr.io/eclipse-fennec/emf.osgi-mcp:${{ inputs.variant }}-${{ steps.bundle_version.outputs.version }}
