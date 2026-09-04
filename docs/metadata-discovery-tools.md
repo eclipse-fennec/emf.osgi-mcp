@@ -143,6 +143,23 @@ population is wider than both. What they return is identity and structure:
 references, names, flags, annotation keys and values, parsed aspect
 configuration. They do not serialize models.
 
+**One policy does apply here: `MCPAnnotationVisibility`.** Annotation content is
+the configuration of everything that reads a model, and it is what these tools
+are built to surface, so the deny-list has to be honoured in this bundle too:
+
+| Tool | Under a denied annotation source | Under a denied aspect type |
+|------|----------------------------------|----------------------------|
+| `list_annotation_sources` | the entry is omitted whole — its keys, hit count and namespaces with it, any one of which would confirm the source exists | — |
+| `find_classes_by_annotation`, `find_features_by_annotation`, `find_operations_by_annotation` | the query is **refused**, not answered empty: an empty result is indistinguishable from "nothing carries this", which would have the agent reuse the convention | — |
+| `describe_aspects` | — | withheld whether asked for by name or not, and the "this element carries no '…' aspect" hint does not name it either |
+| `list_aspects`, `describe_metadata_status` | — | omitted from the inventory |
+
+Enforcing it only in `emf.tools` would have been theatre: `describe_eclass`
+would have withheld a source while `list_annotation_sources` still enumerated
+it and `find_classes_by_annotation` still returned its values. Both lists
+default to empty, so a deployment that configures nothing behaves exactly as
+before. See [the development guide](development-guide.md).
+
 Full-fidelity reads stay in `emf.tools` and stay allow-listed: `describe_eclass`
 and [`export_package`](emf-metamodel-authoring.md), the latter requiring both the
 package and every one of its EClasses on the allow-list. If a deployment needs the queries narrowed

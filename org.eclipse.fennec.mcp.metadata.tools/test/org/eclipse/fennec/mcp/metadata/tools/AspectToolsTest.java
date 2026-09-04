@@ -25,6 +25,7 @@ import java.util.Map;
 import org.eclipse.fennec.codec.metadata.provider.CodecAspectProvider;
 import org.eclipse.fennec.emf.osgi.metadata.MetadataServices;
 import org.eclipse.fennec.emf.osgi.metadata.MetadataWhiteboard;
+import org.eclipse.fennec.mcp.api.AnnotationVisibility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -51,12 +52,15 @@ class AspectToolsTest {
 
 		listAspects = new ListAspectsTool();
 		listAspects.metadata = whiteboard;
+		listAspects.visibility = AnnotationVisibility.unrestricted();
 		listAspects.activate();
 		describeAspects = new DescribeAspectsTool();
 		describeAspects.metadata = whiteboard;
+		describeAspects.visibility = AnnotationVisibility.unrestricted();
 		describeAspects.activate();
 		listAnnotationSources = new ListAnnotationSourcesTool();
 		listAnnotationSources.metadata = whiteboard;
+		listAnnotationSources.visibility = AnnotationVisibility.unrestricted();
 		listAnnotationSources.activate();
 	}
 

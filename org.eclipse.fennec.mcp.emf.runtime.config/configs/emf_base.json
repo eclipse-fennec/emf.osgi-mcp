@@ -1,6 +1,6 @@
 {
     ":configurator:resource-version": 1,
-    "_comment": "Duplicated verbatim in org.eclipse.fennec.mcp.emf.runtime.config and org.eclipse.fennec.mcp.inference.config so each runtime is self-contained. EMFModelGuard and EMFPackageRegistry are SINGLETON PIDs: if both bundles are ever deployed in one framework the Configurator applies one of them wholesale and discards the other - it does not merge. Keep the two copies identical, or the effective allow-list depends on which bundle wins.",
+    "_comment": "Duplicated verbatim in org.eclipse.fennec.mcp.emf.runtime.config and org.eclipse.fennec.mcp.inference.config so each runtime is self-contained. EMFModelGuard, EMFPackageRegistry and MCPAnnotationVisibility are SINGLETON PIDs: if both bundles are ever deployed in one framework the Configurator applies one of them wholesale and discards the other - it does not merge. Keep the two copies identical, or the effective allow-list depends on which bundle wins.",
     "EMFModelGuard": {
         "epackage.allowlist": [
             "https://eclipse.org/fennec/lorawan*",
@@ -23,5 +23,10 @@
         ],
         "nsuri.denylist": [],
         "max.models:int": 100
+    },
+    "MCPAnnotationVisibility": {
+        "_comment": "Deny-list, not an allow-list: annotation sources are open-ended and contributed by whatever is deployed, and the discovery tools exist to find conventions nobody wrote down. Empty denies nothing. 'aspect.type.denylist' is a SEPARATE decision because an aspect is the parsed form of annotations and carries no source - denying a source does not hide the aspect built from it, so describe_aspects would hand back what the source list withholds. Keep the two consistent.",
+        "annotation.source.denylist": [],
+        "aspect.type.denylist": []
     }
 }

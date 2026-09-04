@@ -25,24 +25,48 @@ use a recursive `GenericType` shape (`classifier` | `typeParameter` |
 `typeArguments` | `upperBound` | `lowerBound`) via `eGenericType` /
 `eGenericSuperTypes` / `eGenericExceptions`.
 
-## Reading a metamodel in full: `export_package`
+## Reading one class: `describe_eclass`
 
-`describe_eclass` reports a class's *shape*, never its source, and three things
-fall through the gap:
+`describe_eclass` reports a class's shape — features with their kind, type,
+multiplicity, defaults and enum literals — and also what is needed to *copy* a
+model rather than instantiate it:
 
-- **EAnnotations are invisible.** The describer emits name, package, `abstract`,
-  supertypes, documentation and features — no annotations. So an existing
-  model's codec configuration cannot be seen, let alone copied: not the
-  `typeMapping/{mapId}` source, not `ExtendedMetaData` wire names.
-- **Abstract classes are unreachable.** `list_metamodel` filters them out and
-  `describe_eclass` throws on them — yet an abstract base is exactly what a new
-  model needs to extend.
-- **Supertypes come back as bare names**, with no nsURI, so the
-  `<nsURI>#//<Name>` that `add_eclass`'s `eSuperTypes` needs cannot be built
-  from them.
+| Field | What it carries |
+|-------|-----------------|
+| `annotations` | the EAnnotations of the class, and of every feature, as `[{ "source": …, "details": { … } }]` in their exact spelling — the `typeMapping/{mapId}` source, `ExtendedMetaData` wire names, any project convention |
+| `superTypes` | the **declared** supertypes as `<nsURI>#//<Name>`, ready to hand to `add_eclass`'s `eSuperTypes` |
+| `allSuperTypes` | the transitive closure, same form |
+| `inherited` / `declaringClass` | on a feature that comes from a supertype, so it is not re-declared on a subclass |
+| `abstract` | and abstract classes and interfaces **are** described |
 
-`export_package(nsURI)` returns the whole `.ecore`, which carries all three
-correctly. It is symmetric with `import_ecore`: inline XMI out, inline XMI in.
+`documentation` remains as the convenience view of the GenModel
+`documentation` key; that key also appears in `annotations`, since copying a
+convention means copying its source URI and key exactly.
+
+A deployment can withhold annotation sources through the
+`MCPAnnotationVisibility` deny-list, in which case the withheld ones are omitted
+and `hiddenAnnotations: <n>` reports how many — counted, never named. It denies
+nothing unless configured; see [the development guide](development-guide.md).
+
+Three of these used to be gaps, and they were the reason to fetch a whole
+package: annotations were invisible, supertypes came back as bare flattened
+names with no nsURI, and an abstract class was refused outright — by
+`requireAllowedEClass`, the *instantiation* guard. Reading is not instantiating,
+so the tool now resolves through `requireAllowedEClassForRead`, which applies
+the same package and class allow-lists without the abstract rejection.
+`create_instance` still refuses an abstract class, and a class off the
+allow-list is still refused here.
+
+## Reading a whole package: `export_package`
+
+`export_package(nsURI)` returns the entire `.ecore`. Reach for it when the
+**document** is what you want — to hand a package on, or to emit the `.ecore`
+of one registered in this session — not for fidelity: describing the two or
+three classes you are copying from is cheaper and now says as much about them.
+It is symmetric with `import_ecore`: inline XMI out, inline XMI in. That
+symmetry is why the document is all-or-nothing and cannot be filtered to a
+subset of classifiers, and hence why an OSGi package requires *every* one of
+its EClasses on the allow-list.
 
 **Cross-package references.** A class extending a class in another package is
 written as an external `href="<nsURI>#//<Name>"` and the referenced package is

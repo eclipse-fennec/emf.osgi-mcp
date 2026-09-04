@@ -17,6 +17,7 @@ package org.eclipse.fennec.mcp.emf.tools;
 import java.util.Map;
 
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.fennec.mcp.api.AnnotationVisibility;
 import org.eclipse.fennec.mcp.api.MCPTool;
 import org.eclipse.fennec.mcp.emf.tools.core.EClassDescriber;
 import org.eclipse.fennec.mcp.emf.tools.core.ModelGuard;
@@ -41,6 +42,8 @@ public class DescribeEClassTool extends AbstractEMFTool {
 
 	@Reference
 	ModelGuard guard;
+	@Reference
+	AnnotationVisibility visibility;
 
 	@Activate
 	void activate() {
@@ -48,7 +51,14 @@ public class DescribeEClassTool extends AbstractEMFTool {
 		this.description = "Describe an EClass: all settable features with their kind " +
 				"(attribute, containment, reference), type, multiplicity, required flag, " +
 				"default values and enum literals. Use this before building instances with " +
-				"create_instance and modify_feature.";
+				"create_instance and modify_feature. It also reports what you need in order to " +
+				"copy a model rather than instantiate it: the EAnnotations of the class and of " +
+				"every feature in their exact source and key spelling (ExtendedMetaData wire " +
+				"names included), 'superTypes' as declared against 'allSuperTypes' inherited and " +
+				"both as <nsURI>#//<Name>, and 'inherited'/'declaringClass' on a feature that " +
+				"comes from a supertype so you do not re-declare it. Abstract classes and " +
+				"interfaces are described too — reading one is not instantiating it — so this, " +
+				"not export_package, is the way to read the conventions of a base class.";
 		this.inputSchema = """
 				{
 					"type": "object",
@@ -66,8 +76,8 @@ public class DescribeEClassTool extends AbstractEMFTool {
 	@Override
 	public Mono<McpSchema.CallToolResult> execute(McpAsyncServerExchange exchange, Map<String, Object> arguments) {
 		return run(() -> {
-			EClass eClass = guard.requireAllowedEClass(requireString(arguments, "eClass"));
-			return EClassDescriber.describe(eClass, guard);
+			EClass eClass = guard.requireAllowedEClassForRead(requireString(arguments, "eClass"));
+			return EClassDescriber.describe(eClass, guard, visibility);
 		});
 	}
 }

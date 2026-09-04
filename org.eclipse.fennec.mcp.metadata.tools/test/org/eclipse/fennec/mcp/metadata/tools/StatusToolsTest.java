@@ -24,6 +24,7 @@ import java.util.Map;
 import org.eclipse.fennec.codec.metadata.provider.CodecAspectProvider;
 import org.eclipse.fennec.emf.osgi.metadata.MetadataServices;
 import org.eclipse.fennec.emf.osgi.metadata.MetadataWhiteboard;
+import org.eclipse.fennec.mcp.api.AnnotationVisibility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -46,6 +47,7 @@ class StatusToolsTest {
 
 		status = new DescribeMetadataStatusTool();
 		status.metadata = whiteboard;
+		status.visibility = AnnotationVisibility.unrestricted();
 		status.activate();
 		describePackage = new DescribePackageMetadataTool();
 		describePackage.metadata = whiteboard;

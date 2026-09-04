@@ -25,6 +25,7 @@ import org.eclipse.fennec.emf.osgi.model.metadata.ClassMetadata;
 import org.eclipse.fennec.emf.osgi.model.metadata.FeatureMetadata;
 import org.eclipse.fennec.emf.osgi.model.metadata.OperationMetadata;
 import org.eclipse.fennec.emf.osgi.model.metadata.PackageMetadata;
+import org.eclipse.fennec.mcp.api.AnnotationVisibility;
 import org.eclipse.fennec.mcp.api.MCPTool;
 import org.eclipse.fennec.mcp.metadata.tools.core.AspectRenderer;
 import org.eclipse.fennec.mcp.metadata.tools.core.ElementReference;
@@ -56,6 +57,9 @@ public class DescribeAspectsTool extends AbstractMetadataTool {
 
 	@Reference
 	MetadataService metadata;
+
+	@Reference
+	AnnotationVisibility visibility;
 
 	@Activate
 	void activate() {
@@ -102,7 +106,7 @@ public class DescribeAspectsTool extends AbstractMetadataTool {
 				case MEMBER -> describeMember(element, result);
 			};
 
-			List<Map<String, Object>> rendered = AspectRenderer.render(aspects, aspectTypeId);
+			List<Map<String, Object>> rendered = AspectRenderer.render(aspects, aspectTypeId, visibility);
 			result.put("count", rendered.size());
 			result.put("aspects", rendered);
 			if (rendered.isEmpty()) {
@@ -171,12 +175,24 @@ public class DescribeAspectsTool extends AbstractMetadataTool {
 	 * cannot tell "this element carries no such aspect" from "no provider for that
 	 * aspect is deployed" - so say which type ids the element does carry.
 	 */
-	private static String available(EList<AspectEntry> aspects, String aspectTypeId) {
+	private String available(EList<AspectEntry> aspects, String aspectTypeId) {
 		if (aspects == null || aspects.isEmpty()) {
 			return "This element carries no aspect entries at all. Aspects are contributed by MetadataHandler "
 					+ "providers; call list_aspects to see whether any are deployed in this runtime.";
 		}
-		List<String> typeIds = aspects.stream().map(AspectEntry::getTypeId).distinct().sorted().toList();
+		// The withheld type ids are filtered out of this hint too. Naming them here
+		// would disclose exactly what the deny-list withholds, and this note fires
+		// precisely when an agent asked for a type that returned nothing — which is
+		// what a denied type looks like from the outside.
+		List<String> typeIds = aspects.stream()
+				.map(AspectEntry::getTypeId)
+				.filter(visibility::isAspectTypeVisible)
+				.distinct()
+				.sorted()
+				.toList();
+		if (typeIds.isEmpty()) {
+			return "This element carries no readable aspect entries.";
+		}
 		return String.format("This element carries no '%s' aspect. Available aspect type ids here: %s",
 				aspectTypeId, String.join(", ", typeIds));
 	}

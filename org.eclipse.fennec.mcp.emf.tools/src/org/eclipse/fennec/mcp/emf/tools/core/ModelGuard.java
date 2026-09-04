@@ -28,6 +28,7 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.emf.osgi.ResourceSetFactory;
+import org.eclipse.fennec.mcp.api.UriPatterns;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
@@ -48,7 +49,7 @@ import org.osgi.service.metatype.annotations.Designate;
  * allow-listing a package implies trusting its generated factory and datatype
  * conversion code, which runs in-process.
  * <p>
- * Both lists speak {@link NsUriPatterns}: an exact entry, a {@code prefix*}, or a
+ * Both lists speak {@link UriPatterns}: an exact entry, a {@code prefix*}, or a
  * bare {@code *}. The two stay <b>independent</b> — a package pattern says what
  * may be seen, never what may be instantiated, so widening the package list does
  * not expose a single class. An empty class list is still deny-all however wide
@@ -179,7 +180,7 @@ public class ModelGuard {
 	public List<EPackage> allowedPackages() {
 		List<EPackage> result = new ArrayList<>();
 		for (String nsUri : candidateNamespaces()) {
-			if (!NsUriPatterns.matches(packageAllowList, nsUri)) {
+			if (!UriPatterns.matches(packageAllowList, nsUri)) {
 				continue;
 			}
 			EPackage ePackage = resolvePackage(nsUri);
@@ -214,7 +215,7 @@ public class ModelGuard {
 			LOGGER.log(Level.WARNING, e, () -> "Failed to enumerate the EPackage registry");
 		}
 		for (String pattern : packageAllowList) {
-			if (pattern != null && !pattern.isBlank() && !pattern.endsWith(NsUriPatterns.WILDCARD)) {
+			if (pattern != null && !pattern.isBlank() && !pattern.endsWith(UriPatterns.WILDCARD)) {
 				candidates.add(pattern);
 			}
 		}
@@ -232,7 +233,7 @@ public class ModelGuard {
 			throw new ToolException("Parameter 'nsURI' must not be empty");
 		}
 		// Check the allow-list before touching the registry, so denied input never probes anything
-		if (!NsUriPatterns.matches(packageAllowList, nsUri)) {
+		if (!UriPatterns.matches(packageAllowList, nsUri)) {
 			throw new ToolException(String.format("EPackage '%s' is not allow-listed. Use list_metamodel to see the available packages.", nsUri));
 		}
 		EPackage ePackage = resolvePackage(nsUri);
@@ -252,6 +253,34 @@ public class ModelGuard {
 	 * @throws ToolException if the reference is malformed, denied, unknown, or not a concrete EClass
 	 */
 	public EClass requireAllowedEClass(String eClassRef) {
+		EClass eClass = requireAllowedEClassForRead(eClassRef);
+		if (eClass.isAbstract() || eClass.isInterface()) {
+			throw new ToolException(String.format("EClass '%s' is abstract and cannot be instantiated", eClass.getName()));
+		}
+		return eClass;
+	}
+
+	/**
+	 * Resolves an allow-listed EClass from its identifier
+	 * ({@code <nsURI>#//<ClassName>}) for <i>reading</i> — describing it, not
+	 * instantiating it.
+	 * <p>
+	 * Identical to {@link #requireAllowedEClass(String)} but without the abstract
+	 * rejection, which belongs to instantiation: an abstract base class is the
+	 * most useful thing to read when copying a model family's conventions, and
+	 * refusing to describe it only pushed the agent to fetch the whole
+	 * {@code .ecore} instead. The package and class allow-lists apply unchanged,
+	 * so this discloses nothing {@code requireAllowedEClass} would not.
+	 * <p>
+	 * Not to be confused with {@link #requireAllowedClassifier(String)}, which
+	 * also permits abstract classes but enforces <b>no</b> class allow-list —
+	 * that one is for type references, where naming a class is not reading it.
+	 *
+	 * @param eClassRef the class identifier
+	 * @return the resolved EClass, never {@code null}
+	 * @throws ToolException if the reference is malformed, denied, unknown or not an EClass
+	 */
+	public EClass requireAllowedEClassForRead(String eClassRef) {
 		if (eClassRef == null || !eClassRef.contains(CLASS_REF_SEPARATOR)) {
 			throw new ToolException("Parameter 'eClass' must have the form <nsURI>#//<ClassName>");
 		}
@@ -266,9 +295,6 @@ public class ModelGuard {
 		// allow-list check first: a denied class must not leak its existence or shape
 		if (!isClassAllowed(eClass)) {
 			throw new ToolException(String.format("EClass '%s' is not allow-listed. Use list_metamodel to see the available classes.", eClassRef));
-		}
-		if (eClass.isAbstract() || eClass.isInterface()) {
-			throw new ToolException(String.format("EClass '%s' is abstract and cannot be instantiated", className));
 		}
 		return eClass;
 	}
@@ -366,8 +392,8 @@ public class ModelGuard {
 	public boolean isClassAllowed(EClass eClass) {
 		EPackage ePackage = eClass.getEPackage();
 		return ePackage != null
-				&& NsUriPatterns.matches(packageAllowList, ePackage.getNsURI())
-				&& NsUriPatterns.matches(classAllowList, refOf(eClass));
+				&& UriPatterns.matches(packageAllowList, ePackage.getNsURI())
+				&& UriPatterns.matches(classAllowList, refOf(eClass));
 	}
 
 	/**

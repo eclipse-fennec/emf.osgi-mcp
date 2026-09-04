@@ -37,6 +37,7 @@ import org.eclipse.fennec.emf.osgi.model.metadata.FeatureMetadata;
 import org.eclipse.fennec.emf.osgi.model.metadata.OperationMetadata;
 import org.eclipse.fennec.emf.osgi.model.metadata.PackageMetadata;
 import org.eclipse.fennec.emf.osgi.model.metadata.MetadataDiagnostic;
+import org.eclipse.fennec.mcp.api.AnnotationVisibility;
 
 /**
  * Renders {@link AspectEntry} contents into plain JSON-shaped maps by walking
@@ -74,14 +75,25 @@ public final class AspectRenderer {
 	/**
 	 * @param aspects      the aspect entries of a package, class, feature or operation
 	 * @param aspectTypeId the aspect type to keep, or {@code null} for all of them
+	 * @param visibility   which aspect types may be shown; a withheld type is
+	 *                     rendered for nobody, whether or not it was asked for by
+	 *                     name
 	 * @return the rendered entries, ordered by type id
 	 */
-	public static List<Map<String, Object>> render(EList<AspectEntry> aspects, String aspectTypeId) {
+	public static List<Map<String, Object>> render(EList<AspectEntry> aspects, String aspectTypeId,
+			AnnotationVisibility visibility) {
 		List<Map<String, Object>> rendered = new ArrayList<>();
 		if (aspects == null) {
 			return rendered;
 		}
 		for (AspectEntry entry : aspects) {
+			// An aspect is the parsed form of annotations and carries no source, so
+			// the annotation-source deny-list cannot reach it: without this, a denied
+			// 'codec' source is still readable as a 'codec' aspect, which is the
+			// class's serialization configuration in full.
+			if (!visibility.isAspectTypeVisible(entry.getTypeId())) {
+				continue;
+			}
 			if (aspectTypeId == null || aspectTypeId.equals(entry.getTypeId())) {
 				rendered.add(renderEntry(entry));
 			}
@@ -97,10 +109,12 @@ public final class AspectRenderer {
 	 * "what aspect vocabularies exist here" without any of them being known in
 	 * advance.
 	 *
-	 * @param packages the registered package versions
+	 * @param packages   the registered package versions
+	 * @param visibility which aspect types may be shown
 	 * @return aspect type id to element kind to count, both keys ordered
 	 */
-	public static Map<String, Map<String, Integer>> summarize(List<PackageMetadata> packages) {
+	public static Map<String, Map<String, Integer>> summarize(List<PackageMetadata> packages,
+			AnnotationVisibility visibility) {
 		Map<String, Map<String, Integer>> byTypeId = new TreeMap<>();
 		for (PackageMetadata packageMetadata : packages) {
 			count(byTypeId, packageMetadata.getAspects(), "package");
@@ -114,6 +128,7 @@ public final class AspectRenderer {
 				}
 			}
 		}
+		byTypeId.keySet().removeIf(typeId -> !visibility.isAspectTypeVisible(typeId));
 		return byTypeId;
 	}
 

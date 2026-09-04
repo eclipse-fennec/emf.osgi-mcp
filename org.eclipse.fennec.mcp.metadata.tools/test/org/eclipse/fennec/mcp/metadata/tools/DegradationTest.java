@@ -23,6 +23,7 @@ import java.util.Optional;
 
 import org.eclipse.fennec.emf.osgi.metadata.MetadataService;
 import org.eclipse.fennec.emf.osgi.model.metadata.MetadataFactory;
+import org.eclipse.fennec.mcp.api.AnnotationVisibility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -50,6 +51,8 @@ class DegradationTest {
 	void findClassesByAnnotationReportsTheMissingIndex() {
 		FindClassesByAnnotationTool tool = new FindClassesByAnnotationTool();
 		tool.metadata = metadata;
+		tool.visibility = AnnotationVisibility.unrestricted();
+		tool.visibility = AnnotationVisibility.unrestricted();
 		tool.activate();
 
 		String error = ToolCalls.callExpectingError(tool, Map.of("annotationSource", "urn:x", "key", "k"));
@@ -62,6 +65,8 @@ class DegradationTest {
 	void findFeaturesByAnnotationReportsTheMissingIndex() {
 		FindFeaturesByAnnotationTool tool = new FindFeaturesByAnnotationTool();
 		tool.metadata = metadata;
+		tool.visibility = AnnotationVisibility.unrestricted();
+		tool.visibility = AnnotationVisibility.unrestricted();
 		tool.activate();
 
 		assertThat(ToolCalls.callExpectingError(tool, Map.of("annotationSource", "urn:x", "key", "k")))
@@ -72,6 +77,8 @@ class DegradationTest {
 	void findOperationsByAnnotationReportsTheMissingIndex() {
 		FindOperationsByAnnotationTool tool = new FindOperationsByAnnotationTool();
 		tool.metadata = metadata;
+		tool.visibility = AnnotationVisibility.unrestricted();
+		tool.visibility = AnnotationVisibility.unrestricted();
 		tool.activate();
 
 		assertThat(ToolCalls.callExpectingError(tool, Map.of("annotationSource", "urn:x", "key", "k")))
@@ -92,6 +99,8 @@ class DegradationTest {
 	void describeAspectsReportsTheMissingIndexForAClass() {
 		DescribeAspectsTool tool = new DescribeAspectsTool();
 		tool.metadata = metadata;
+		tool.visibility = AnnotationVisibility.unrestricted();
+		tool.visibility = AnnotationVisibility.unrestricted();
 		tool.activate();
 
 		assertThat(ToolCalls.callExpectingError(tool, Map.of("element", "urn:x#//Thing")))
@@ -102,6 +111,8 @@ class DegradationTest {
 	void statusStillAnswersAndSaysWhyEverythingElseWillNot() {
 		DescribeMetadataStatusTool tool = new DescribeMetadataStatusTool();
 		tool.metadata = metadata;
+		tool.visibility = AnnotationVisibility.unrestricted();
+		tool.visibility = AnnotationVisibility.unrestricted();
 		tool.activate();
 
 		Map<String, Object> result = ToolCalls.call(tool, Map.of());

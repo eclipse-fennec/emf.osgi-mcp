@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.mcp.emf.tools.core;
 
+import org.eclipse.fennec.mcp.api.UriPatterns;
 import org.osgi.service.metatype.annotations.AttributeDefinition;
 import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 
@@ -23,7 +24,7 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
  * instantiable unless explicitly listed (security-by-default).
  * <p>
  * Entries may be exact, a {@code prefix*}, or a bare {@code *} — see
- * {@link NsUriPatterns}. The two lists are independent: a package pattern never
+ * {@link UriPatterns}. The two lists are independent: a package pattern never
  * implies class access.
  *
  * @author Mark Hoffmann

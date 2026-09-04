@@ -12,13 +12,20 @@
  *   Data In Motion Consulting - initial implementation
  * ******************************************************************
  */
-package org.eclipse.fennec.mcp.emf.tools.core;
+package org.eclipse.fennec.mcp.api;
 
 import java.util.Collection;
 
 /**
- * The one pattern language every allow- and deny-list in this bundle speaks:
- * an exact string, a {@code prefix*}, or a bare {@code *}.
+ * The one pattern language every allow- and deny-list across these bundles
+ * speaks: an exact string, a {@code prefix*}, or a bare {@code *}.
+ * <p>
+ * It lives here rather than in {@code emf.tools} because three concerns now
+ * share it: the model guard's package and class allow-lists, the package
+ * registry's registration lists, and the annotation-source deny-list read by
+ * both {@code emf.tools} and {@code metadata.tools}. The values are namespace
+ * URIs, class identifiers ({@code <nsURI>#//<Name>}) and annotation source
+ * URIs — all URI-shaped, which is why one matcher covers them.
  * <p>
  * Deliberately not a glob and not a regex. A list entry is either a literal or a
  * prefix, so an entry can only ever widen a rule <em>rightwards</em> from a
@@ -28,18 +35,20 @@ import java.util.Collection;
  * {@code https://eclipse.org/fennec/} cannot be satisfied by
  * {@code https://evil.example/https://eclipse.org/fennec/x}.
  * <p>
- * An empty collection matches nothing. Every list in this bundle is deny-all
- * when unconfigured, and that follows from this.
+ * An empty collection matches nothing. Every <em>allow</em>-list built on this
+ * is therefore deny-all when unconfigured, and every <em>deny</em>-list is
+ * permit-all — in both cases the unconfigured state is the one the list's own
+ * default expresses, never a surprise from the matcher.
  *
  * @author ilenia
  * @since Aug 27, 2026
  */
-final class NsUriPatterns {
+public final class UriPatterns {
 
 	/** The wildcard suffix that turns an entry into a prefix rule, and alone into "everything". */
-	static final String WILDCARD = "*";
+	public static final String WILDCARD = "*";
 
-	private NsUriPatterns() {
+	private UriPatterns() {
 		// static helpers
 	}
 
@@ -48,7 +57,7 @@ final class NsUriPatterns {
 	 * @param value    the namespace URI or class identifier to test
 	 * @return {@code true} if some pattern admits the value
 	 */
-	static boolean matches(Collection<String> patterns, String value) {
+	public static boolean matches(Collection<String> patterns, String value) {
 		if (value == null || patterns == null) {
 			return false;
 		}

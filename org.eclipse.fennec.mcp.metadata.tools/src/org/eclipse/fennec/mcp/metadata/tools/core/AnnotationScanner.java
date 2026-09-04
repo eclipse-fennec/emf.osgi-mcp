@@ -33,6 +33,7 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EParameter;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.fennec.emf.osgi.model.metadata.PackageMetadata;
+import org.eclipse.fennec.mcp.api.AnnotationVisibility;
 
 /**
  * Collects the annotation vocabularies present across registered packages.
@@ -54,10 +55,12 @@ public final class AnnotationScanner {
 	}
 
 	/**
-	 * @param packages the registered package versions to scan
-	 * @return one entry per distinct annotation source, ordered by source
+	 * @param packages   the registered package versions to scan
+	 * @param visibility which annotation sources may be shown; a withheld source
+	 *                   contributes no entry at all
+	 * @return one entry per distinct visible annotation source, ordered by source
 	 */
-	public static List<Map<String, Object>> scan(List<PackageMetadata> packages) {
+	public static List<Map<String, Object>> scan(List<PackageMetadata> packages, AnnotationVisibility visibility) {
 		Map<String, Source> bySource = new TreeMap<>();
 		for (PackageMetadata packageMetadata : packages) {
 			EPackage ePackage = packageMetadata.getEPackage();
@@ -73,6 +76,13 @@ public final class AnnotationScanner {
 		}
 		List<Map<String, Object>> rendered = new ArrayList<>(bySource.size());
 		for (Source source : bySource.values()) {
+			// The map is keyed by source, so dropping the whole entry withholds its
+			// keys, its hit count and the namespaces it occurs in together — all of
+			// which this tool reports per source, and any one of which would confirm
+			// a withheld source exists.
+			if (!visibility.isSourceVisible(source.source)) {
+				continue;
+			}
 			rendered.add(source.render());
 		}
 		return rendered;

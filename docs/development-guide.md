@@ -481,6 +481,63 @@ readable without anyone editing configuration to name it. Before this, the
 metadata discovery tools could find such a package while `list_metamodel` and
 `describe_eclass` could not read it.
 
+### Annotation visibility
+
+An EAnnotation is where a model keeps the configuration of everything that reads
+it — codec type mappings, persistence hints, wire names, deployment detail — so
+an agent that can read annotations reads all of that. The `MCPAnnotationVisibility`
+PID withholds the sources a deployment does not want handed out:
+
+```json
+"MCPAnnotationVisibility": {
+    "annotation.source.denylist": ["http://internal.example/persistence/*"],
+    "aspect.type.denylist": ["persistence"]
+}
+```
+
+Both lists speak the same patterns as every other list here — exact, `prefix*`,
+bare `*` — via `UriPatterns`, which lives in `mcp.api` because three concerns now
+share it. **Both default to empty, which denies nothing:** adding the PID to a
+deployment changes no behaviour until an entry is written.
+
+**A deny-list, where packages and classes get allow-lists.** Packages and classes
+are a closed, enumerable set, so naming what is permitted is possible and safe.
+Annotation sources are open-ended, contributed by whatever is deployed, and the
+whole point of the discovery tools is to find conventions nobody wrote down in
+advance. An allow-list would hide every unknown-but-harmless source and defeat
+the feature.
+
+**Two lists, because an aspect has no source.** A metadata aspect is the *parsed*
+form of one or more annotations, and `AspectEntry` carries a type id, content and
+diagnostics — not the source it was built from. Denying a source therefore cannot
+hide the aspect built from it, and a `codec` aspect is exactly a class's
+serialization configuration. Keep the two lists consistent, or `describe_aspects`
+hands back what the source list withholds.
+
+**Where it is enforced.** The policy lives in `mcp.api`, the one bundle both tool
+bundles depend on, and every path that can disclose an annotation honours it:
+
+| Path | Bundle | Under a denial |
+|------|--------|----------------|
+| `describe_eclass` | `emf.tools` | the annotation is omitted and `hiddenAnnotations: <n>` is reported — counted, never named, the same rule `export_package` applies to denied classes |
+| `export_package` | `emf.tools` | **refused** for an OSGi package carrying a denied source. A `.ecore` carries every annotation and cannot be filtered without ceasing to be the package; stripping them would produce a document that no longer says what it claims and that a re-import would silently flatten. A *session* package is exported regardless — it is the agent's own authored or imported work, so withholding it protects nothing, exactly as the allow-list is not re-checked for those |
+| `list_annotation_sources` | `metadata.tools` | the whole entry is omitted, with its keys, hit count and namespaces |
+| `find_{classes,features,operations}_by_annotation` | `metadata.tools` | the query is refused; an empty answer would read as "nothing carries this" |
+| `describe_aspects`, `list_aspects`, `describe_metadata_status` | `metadata.tools` | denied aspect types are withheld, including from `describe_aspects`'s "available type ids" hint |
+
+The component's configuration policy is deliberately **optional**: the tools bind
+`AnnotationVisibility` mandatorily, so a component requiring configuration would
+leave a runtime without the PID with no annotation tools at all, rather than with
+unrestricted ones.
+
+`describe_eclass` resolves through `ModelGuard.requireAllowedEClassForRead`,
+which enforces both allow-lists but permits abstract classes and interfaces —
+reading a class is not instantiating one. `requireAllowedEClass` keeps the
+abstract rejection for `create_instance` and `create_from_json`. Do not reach
+for `requireAllowedClassifier` to describe something: it also permits abstract
+classes but enforces **no** class allow-list, because naming a class as a
+*type* is not reading it.
+
 Two consequences worth knowing:
 
 - Enumeration is only as complete as the registry's `keySet()`. The literal
