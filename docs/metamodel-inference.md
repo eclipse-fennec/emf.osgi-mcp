@@ -18,18 +18,18 @@ generics, dataset management. That is right for a human-driven authoring session
 and wrong for an autonomous inference run, where every extra tool is another way
 to wander off task.
 
-`MCPToolProvider~inference` therefore filters **21** tools out of the available
+`MCPToolProvider~inference` therefore filters **20** tools out of the available
 set:
 
 | Source bundle | Count | Tools |
 |---|---|---|
-| `mcp.emf.tools` | 16 | `list_metamodel`, `describe_eclass`, `export_package`, `create_dataset`, `create_epackage`, `add_eclass`, `add_eattribute`, `add_ereference`, `add_eannotation`, `add_eenum`, `add_eenum_literal`, `modify_feature`, `create_from_json`, `export_dataset`, `register_package`, `list_registry` |
+| `mcp.emf.tools` | 15 | `list_metamodel`, `describe_eclass`, `export_package`, `create_dataset`, `create_epackage`, `add_eclass`, `add_eattribute`, `add_ereference`, `add_eannotation`, `add_eenum`, `add_eenum_literal`, `modify_feature`, `create_from_json`, `register_package`, `list_registry` |
 | `mcp.metadata.tools` | 4 | `list_annotation_sources`, `find_classes_by_annotation`, `find_features_by_annotation`, `describe_aspects` |
 | `model.atlas.mcp.tools` | 1 | `post_to_model_atlas` |
 
 Deliberately omitted: instance manipulation (`create_instance`,
 `delete_instance`), dataset plumbing (`inspect_dataset`, `manage_dataset`,
-`replay_recipe`), import/replay (`import_ecore`, `import_instances`), operations
+`replay_recipe`, `export_dataset`), import/replay (`import_ecore`, `import_instances`), operations
 and generics (`add_eoperation`, `add_eparameter`, `add_etypeparameter`),
 `add_edatatype`, `unregister_package`, and the five broader discovery tools.
 
@@ -54,9 +54,18 @@ be checked or handed over:
   handles the document, and cannot choose the scope, the stage or whether an
   existing draft is replaced.
 
-`export_dataset` and `export_package` remain in the set for when the agent
-genuinely wants a serialization to read — not as the way to find out whether
-what it built is correct.
+- `describe_eclass` answers the discovery question without a document. It
+  reports one class's EAnnotations in their exact spelling, its declared
+  supertypes apart from the inherited ones and both qualified, and which
+  features are inherited — and it describes abstract classes and interfaces,
+  where a family's conventions usually live. The agent reads the two or three
+  classes it is copying from instead of pulling a whole package's `.ecore`.
+
+`export_package` remains in the set for when the agent genuinely wants a
+serialization to read — not as the way to find out whether what it built is
+correct, nor as the way to read a convention. `export_dataset` left the set
+with the coverage report, which removed the only reason the flow had to
+serialize an instance at all.
 
 ## The two runtimes are alternatives, not layers
 
@@ -79,8 +88,8 @@ reason, each runtime being self-contained. **Keep the two copies identical.**
 |---|---|---|
 | `org.eclipse.fennec.mcp.inference.runtime` | emf.osgi-mcp | resolution anchor: provides `osgi.implementation=mcp.inference`, requires the whole closure |
 | `org.eclipse.fennec.mcp.inference.config` | emf.osgi-mcp | `MCPToolProvider~inference`, `HttpMCPServerComponent~inference`, Felix HTTP `~inference`, and its copy of `EMFModelGuard` / `EMFPackageRegistry` |
-| `org.eclipse.fennec.mcp.emf.tools` | emf.osgi-mcp | 16 of the 21 tools |
-| `org.eclipse.fennec.mcp.metadata.tools` | emf.osgi-mcp | 4 of the 21 tools |
+| `org.eclipse.fennec.mcp.emf.tools` | emf.osgi-mcp | 15 of the 20 tools |
+| `org.eclipse.fennec.mcp.metadata.tools` | emf.osgi-mcp | 4 of the 20 tools |
 | `org.eclipse.fennec.model.atlas.mcp.tools` | **model.atlas** | `post_to_model_atlas` and the `ModelAtlasPublisher` service |
 | `org.eclipse.fennec.model.atlas.mcp.config` | **model.atlas** | `MCPToolProvider~modelAtlas` and the `ModelAtlasPublisher~publisher` configuration |
 
@@ -117,7 +126,7 @@ manifest requirements:
 })
 ```
 
-That is what makes `~inference`'s hard `tools.cardinality.minimum` of 21 safe:
+That is what makes `~inference`'s hard `tools.cardinality.minimum` of 20 safe:
 the tools cannot be missing if the capability resolved. It also has a
 consequence worth knowing in advance — **a renamed or missing bundle in that
 list is reported against the capability, not against the bundle you asked for:**
@@ -250,7 +259,7 @@ activate on a blank `base.uri`, `scope`, `stage`, `packages.path` or
 
 > A blank `base.uri` or `scope` does not merely disable publishing. The
 > publisher does not activate, so `post_to_model_atlas` is never registered,
-> so `MCPToolProvider~inference` sits at 20 of its required 21 tools, and
+> so `MCPToolProvider~inference` sits at 19 of its required 20 tools, and
 > **`/mcp/inference` does not come up at all.**
 
 The reason to validate rather than tolerate is that an unset environment
@@ -319,7 +328,7 @@ so the runtime stops resolving against a jar only your checkout has.
 | Symptom | Cause |
 |---|---|
 | `osgi.implementation=mcp.inference cannot be resolved` naming a bundle you never requested | that identity requirement is compiled into `MCPServerActivator`'s manifest; fix the annotation, rebuild, re-resolve |
-| `/mcp/inference` never comes up, no obvious error | one of the 21 tools is missing — most often `post_to_model_atlas`, because the publisher refused to activate on a blank `base.uri` or `scope` |
+| `/mcp/inference` never comes up, no obvious error | one of the 20 tools is missing — most often `post_to_model_atlas`, because the publisher refused to activate on a blank `base.uri` or `scope` |
 | `resolve` fails on `secrets.bndrun` | use `resolve.launch` |
 | Publishing refused: "namespace is not publishable" | `publish.nsuri.allowlist` — check the pipe separator survived bnd's comma splitting (`jcmd <pid> VM.system_properties \| grep MCP_ATLAS`) |
 | Publishing refused: "no package is registered under …" | `register_package` has not accepted it; check `EMFPackageRegistry.nsuri.allowlist` |

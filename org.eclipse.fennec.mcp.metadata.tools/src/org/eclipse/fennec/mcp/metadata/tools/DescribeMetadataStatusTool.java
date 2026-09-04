@@ -21,6 +21,7 @@ import java.util.TreeSet;
 
 import org.eclipse.fennec.emf.osgi.metadata.MetadataService;
 import org.eclipse.fennec.emf.osgi.model.metadata.PackageMetadata;
+import org.eclipse.fennec.mcp.api.AnnotationVisibility;
 import org.eclipse.fennec.mcp.api.MCPTool;
 import org.eclipse.fennec.mcp.metadata.tools.core.AspectRenderer;
 import org.eclipse.fennec.mcp.metadata.tools.core.MetadataViews;
@@ -49,6 +50,9 @@ public class DescribeMetadataStatusTool extends AbstractMetadataTool {
 
 	@Reference
 	MetadataService metadata;
+
+	@Reference
+	AnnotationVisibility visibility;
 
 	@Activate
 	void activate() {
@@ -97,7 +101,7 @@ public class DescribeMetadataStatusTool extends AbstractMetadataTool {
 			result.put("distinctNamespaces", namespaces.size());
 			result.put("namespaces", List.copyOf(namespaces));
 			result.put("packageVersionsByOrigin", origins);
-			result.put("aspectTypeIds", List.copyOf(AspectRenderer.summarize(packages).keySet()));
+			result.put("aspectTypeIds", List.copyOf(AspectRenderer.summarize(packages, visibility).keySet()));
 			if (!indexAvailable) {
 				result.put("note", "No metadata index is bound, so every lookup tool in this bundle will "
 						+ "report an error rather than an empty result. Deploy the bundle providing the "

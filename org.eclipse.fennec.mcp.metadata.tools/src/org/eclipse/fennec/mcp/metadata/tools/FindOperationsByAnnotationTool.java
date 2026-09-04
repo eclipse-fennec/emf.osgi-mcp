@@ -20,8 +20,10 @@ import java.util.Map;
 
 import org.eclipse.fennec.emf.osgi.metadata.MetadataService;
 import org.eclipse.fennec.emf.osgi.model.metadata.OperationMetadata;
+import org.eclipse.fennec.mcp.api.AnnotationVisibility;
 import org.eclipse.fennec.mcp.api.MCPTool;
 import org.eclipse.fennec.mcp.metadata.tools.core.MetadataViews;
+import org.eclipse.fennec.mcp.metadata.tools.core.ToolException;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
@@ -42,6 +44,9 @@ public class FindOperationsByAnnotationTool extends AbstractMetadataTool {
 
 	@Reference
 	MetadataService metadata;
+
+	@Reference
+	AnnotationVisibility visibility;
 
 	@Activate
 	void activate() {
@@ -75,6 +80,13 @@ public class FindOperationsByAnnotationTool extends AbstractMetadataTool {
 	public Mono<McpSchema.CallToolResult> execute(McpAsyncServerExchange exchange, Map<String, Object> arguments) {
 		return run(() -> {
 			String source = requireString(arguments, "annotationSource");
+			if (!visibility.isSourceVisible(source)) {
+				// Refused rather than answered with an empty list: an empty result is
+				// indistinguishable from "no class carries this", and would have the
+				// agent conclude the convention is free and reuse it.
+				throw new ToolException(String.format(
+						"Annotation source '%s' is withheld by this deployment and cannot be queried", source));
+			}
 			String key = requireString(arguments, "key");
 			String value = optionalString(arguments, "value");
 

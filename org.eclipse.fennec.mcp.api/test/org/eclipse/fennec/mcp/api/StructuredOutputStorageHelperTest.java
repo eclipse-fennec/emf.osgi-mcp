@@ -25,6 +25,8 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import org.eclipse.emf.common.util.BasicEList;
@@ -82,6 +84,11 @@ class StructuredOutputStorageHelperTest {
 		resourceSet = mock(ResourceSet.class);
 		when(resourceSet.createResource(any())).thenReturn(resource);
 		when(resource.getContents()).thenReturn(new BasicEList<>());
+		// A real Resource lazily creates these and never returns null; the mock has
+		// to say so too, or the diagnostics collection sees a null it could never
+		// see in a runtime.
+		when(resource.getErrors()).thenReturn(new BasicEList<>());
+		when(resource.getWarnings()).thenReturn(new BasicEList<>());
 	}
 
 	@Test
@@ -162,6 +169,101 @@ class StructuredOutputStorageHelperTest {
 		loadYields(EcoreUtil.create(other));
 
 		assertThat(StructuredOutputStorageHelper.loadEObject(classUri, PROPERTIES, resourceSet)).isNull();
+	}
+
+	@Test
+	@DisplayName("the codec's own complaints reach a caller that asks for them")
+	void diagnosticsAreCollected() throws Exception {
+		when(resource.getErrors()).thenReturn(diagnostics("no feature 'municipality'"));
+		when(resource.getWarnings()).thenReturn(diagnostics("value coerced to EString"));
+		loadYields(EcoreUtil.create(thing));
+		List<String> collected = new ArrayList<>();
+
+		EObject loaded = StructuredOutputStorageHelper.loadEObject(thing, PROPERTIES, resourceSet, collected);
+
+		// A load can succeed while the codec still failed to place part of the
+		// payload. Discarding these is what makes a lossy load indistinguishable
+		// from a clean one.
+		assertThat(loaded).isNotNull();
+		assertThat(collected).containsExactly("no feature 'municipality'", "value coerced to EString");
+	}
+
+	@Test
+	@DisplayName("a load that produced nothing still says why")
+	void diagnosticsSurviveAnEmptyLoad() throws Exception {
+		when(resource.getErrors()).thenReturn(diagnostics("root type is not deserializable"));
+		List<String> collected = new ArrayList<>();
+
+		assertThat(StructuredOutputStorageHelper.loadEObject(thing, PROPERTIES, resourceSet, collected)).isNull();
+		assertThat(collected).containsExactly("root type is not deserializable");
+	}
+
+	@Test
+	@DisplayName("a failing load contributes its exception message rather than a stack trace")
+	void aFailingLoadIsReportedAsADiagnostic() throws Exception {
+		doThrow(new IOException("codec said no")).when(resource).load(any(), any());
+		List<String> collected = new ArrayList<>();
+
+		assertThat(StructuredOutputStorageHelper.loadEObject(thing, PROPERTIES, resourceSet, collected)).isNull();
+		assertThat(collected).containsExactly("codec said no");
+	}
+
+	@Test
+	@DisplayName("the diagnostics list is appended to, not cleared")
+	void diagnosticsAreAppended() throws Exception {
+		when(resource.getErrors()).thenReturn(diagnostics("second"));
+		loadYields(EcoreUtil.create(thing));
+		List<String> collected = new ArrayList<>(List.of("first"));
+
+		StructuredOutputStorageHelper.loadEObject(thing, PROPERTIES, resourceSet, collected);
+
+		// The callers accumulate across several loads into one report.
+		assertThat(collected).containsExactly("first", "second");
+	}
+
+	@Test
+	@DisplayName("the overload without diagnostics behaves as before when the codec complains")
+	void theQuietOverloadIsUnaffected() throws Exception {
+		when(resource.getErrors()).thenReturn(diagnostics("no feature 'municipality'"));
+		EObject expected = EcoreUtil.create(thing);
+		loadYields(expected);
+
+		assertThat(StructuredOutputStorageHelper.loadEObject(thing, PROPERTIES, resourceSet)).isSameAs(expected);
+	}
+
+	/**
+	 * Real diagnostics rather than mocks: these are built inside the argument list
+	 * of a {@code when(...)} call, and creating a mock there is nested stubbing.
+	 */
+	private static EList<Resource.Diagnostic> diagnostics(String... messages) {
+		EList<Resource.Diagnostic> result = new BasicEList<>();
+		for (String message : messages) {
+			result.add(new StubDiagnostic(message));
+		}
+		return result;
+	}
+
+	private record StubDiagnostic(String message) implements Resource.Diagnostic {
+
+		@Override
+		public String getMessage() {
+			return message;
+		}
+
+		@Override
+		public String getLocation() {
+			return StructuredOutputStorageHelperTest.class.getSimpleName();
+		}
+
+		@Override
+		public int getLine() {
+			return 0;
+		}
+
+		@Override
+		public int getColumn() {
+			return 0;
+		}
 	}
 
 	/** Makes the stubbed codec resource produce {@code root} when it is loaded. */

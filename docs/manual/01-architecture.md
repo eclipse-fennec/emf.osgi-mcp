@@ -72,7 +72,7 @@ in the same edit.
 The corollary shapes how optional features are packaged. `/mcp/emf` names
 `model_atlas_tool_provider` in its filter but requires only **2** providers, so
 the endpoint comes up whether or not the model.atlas bundles are deployed.
-`MCPToolProvider~inference`, by contrast, keeps a hard minimum of 21 including
+`MCPToolProvider~inference`, by contrast, keeps a hard minimum of 20 including
 `post_to_model_atlas` — safe only because its configuration ships in
 `inference.config`, which `inference.runtime` requires *together with* the bundle
 providing that tool. The resolve guarantees the count.

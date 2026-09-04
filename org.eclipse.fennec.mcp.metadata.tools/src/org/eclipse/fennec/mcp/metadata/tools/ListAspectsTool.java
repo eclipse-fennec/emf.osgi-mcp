@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.eclipse.fennec.emf.osgi.metadata.MetadataService;
+import org.eclipse.fennec.mcp.api.AnnotationVisibility;
 import org.eclipse.fennec.mcp.api.MCPTool;
 import org.eclipse.fennec.mcp.metadata.tools.core.AspectRenderer;
 import org.eclipse.fennec.mcp.metadata.tools.core.MetadataViews;
@@ -49,6 +50,9 @@ public class ListAspectsTool extends AbstractMetadataTool {
 	@Reference
 	MetadataService metadata;
 
+	@Reference
+	AnnotationVisibility visibility;
+
 	@Activate
 	void activate() {
 		this.name = "list_aspects";
@@ -68,7 +72,7 @@ public class ListAspectsTool extends AbstractMetadataTool {
 	@Override
 	public Mono<McpSchema.CallToolResult> execute(McpAsyncServerExchange exchange, Map<String, Object> arguments) {
 		return run(() -> {
-			Map<String, Map<String, Integer>> summary = AspectRenderer.summarize(MetadataViews.packages(metadata));
+			Map<String, Map<String, Integer>> summary = AspectRenderer.summarize(MetadataViews.packages(metadata), visibility);
 
 			List<Map<String, Object>> aspects = new ArrayList<>(summary.size());
 			for (Map.Entry<String, Map<String, Integer>> entry : summary.entrySet()) {

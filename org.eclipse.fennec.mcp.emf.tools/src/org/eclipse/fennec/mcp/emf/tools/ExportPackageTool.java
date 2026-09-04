@@ -16,12 +16,19 @@ package org.eclipse.fennec.mcp.emf.tools;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EModelElement;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.fennec.mcp.api.AnnotationVisibility;
 import org.eclipse.fennec.mcp.api.MCPTool;
 import org.eclipse.fennec.mcp.emf.tools.core.DatasetRegistry;
 import org.eclipse.fennec.mcp.emf.tools.core.Exports;
@@ -38,14 +45,19 @@ import reactor.core.publisher.Mono;
 
 /**
  * MCP tool serializing a registered EPackage to a standalone {@code .ecore}
- * document — the only full-fidelity read of a metamodel in this bundle.
+ * document.
  * <p>
- * {@code describe_eclass} reports a class's shape but never its source: it emits
- * no EAnnotations, throws on abstract classes and reports supertypes as bare
- * names. The {@code .ecore} carries all three correctly, which is why this is
- * one tool rather than three patches to the describer.
+ * This used to be the only way to read a metamodel faithfully, because
+ * {@code describe_eclass} emitted no EAnnotations, refused abstract classes and
+ * reported supertypes as bare names. It now carries all three, so the reason to
+ * come here is the <i>document</i> — a whole package in the form other EMF
+ * tooling reads and writes — and no longer the fidelity. An agent that wants the
+ * conventions of a class or two should describe them instead of paying for the
+ * whole package.
  * <p>
- * Symmetric with {@code import_ecore}: inline XMI out, inline XMI in.
+ * Symmetric with {@code import_ecore}: inline XMI out, inline XMI in. That
+ * symmetry is why the document stays all-or-nothing and unfilterable, and hence
+ * why an OSGi package needs every one of its EClasses allow-listed.
  *
  * @author ilenia
  * @since Aug 26, 2026
@@ -61,6 +73,8 @@ public class ExportPackageTool extends AbstractEMFTool {
 	@Reference
 	ModelGuard guard;
 	@Reference
+	AnnotationVisibility visibility;
+	@Reference
 	PackageRegistry packages;
 	@Reference
 	DatasetRegistry registry;
@@ -68,12 +82,12 @@ public class ExportPackageTool extends AbstractEMFTool {
 	@Activate
 	void activate() {
 		this.name = "export_package";
-		this.description = "Serialize a registered EPackage to a standalone .ecore document — the full source of "
-				+ "a metamodel, which describe_eclass cannot give you: it emits no EAnnotations, throws on "
-				+ "abstract classes and reports supertypes as bare names without their nsURI. Use it to read the "
-				+ "exact pattern of an existing model before copying it (annotation sources and their spelling, "
-				+ "ExtendedMetaData wire names, abstract base classes), and to emit the .ecore of a package you "
-				+ "registered in this session. Classes in other packages are written as external references "
+		this.description = "Serialize a registered EPackage to a standalone .ecore document: a whole metamodel in "
+				+ "the form other EMF tooling reads and writes. Use it when you want the document — to hand a "
+				+ "package on, or to emit the .ecore of one you registered in this session. To read the "
+				+ "conventions of a class before copying it, use describe_eclass instead: it now reports "
+				+ "EAnnotations in their exact spelling, abstract classes and qualified supertypes, and costs "
+				+ "you one class rather than the whole package. Classes in other packages are written as external references "
 				+ "'<nsURI>#//<Name>', never inlined — so a document with external references will not re-import "
 				+ "into a fresh session, because import_ecore seeds no packages and refuses unresolved ones. "
 				+ "Session-registered packages are exported as they are; an OSGi package must be allow-listed, "
@@ -117,6 +131,7 @@ public class ExportPackageTool extends AbstractEMFTool {
 				ePackage = guard.requireAllowedPackage(nsURI);
 				origin = "osgi";
 				requireFullyAllowListed(ePackage);
+				requireEveryAnnotationVisible(ePackage);
 			}
 
 			String content = Exports.toEcore(ePackage);
@@ -154,6 +169,54 @@ public class ExportPackageTool extends AbstractEMFTool {
 	 * The denied classes are counted, never named: naming them would disclose
 	 * exactly what {@code list_metamodel} withholds.
 	 */
+	/**
+	 * A {@code .ecore} carries every EAnnotation of the package, so a package with
+	 * a denied annotation source cannot be exported at all — the same all-or-nothing
+	 * rule as {@link #requireFullyAllowListed}, for the same reason: the document
+	 * cannot be filtered without ceasing to be the package.
+	 * <p>
+	 * Stripping the denied annotations instead would produce a document that no
+	 * longer says what it claims to say, and that a re-import would silently
+	 * flatten. Refusing keeps {@code export_package} honest and leaves
+	 * {@code describe_eclass} — which <em>can</em> filter, and reports a count of
+	 * what it withheld — as the way to read such a package.
+	 * <p>
+	 * Only for packages from the OSGi registry. A session-registered package is
+	 * the agent's own authored or imported work, so withholding it from the agent
+	 * protects nothing, exactly as the allow-list is not re-checked for those.
+	 * <p>
+	 * The offending sources are counted, never named.
+	 */
+	private void requireEveryAnnotationVisible(EPackage ePackage) {
+		if (visibility.isUnrestricted()) {
+			return;
+		}
+		Set<String> denied = new LinkedHashSet<>();
+		collectDeniedSources(ePackage, denied);
+		for (Iterator<EObject> contents = ePackage.eAllContents(); contents.hasNext();) {
+			collectDeniedSources(contents.next(), denied);
+		}
+		if (!denied.isEmpty()) {
+			throw new ToolException(String.format(
+					"EPackage '%s' cannot be exported: %d of its EAnnotation source(s) are withheld by the "
+							+ "deployment. A .ecore document is the whole package and carries every annotation, so "
+							+ "it cannot be filtered. Use describe_eclass to read the classes you need; it omits "
+							+ "the withheld annotations and reports how many it omitted.",
+					ePackage.getNsURI(), denied.size()));
+		}
+	}
+
+	private void collectDeniedSources(EObject eObject, Set<String> denied) {
+		if (!(eObject instanceof EModelElement element)) {
+			return;
+		}
+		for (EAnnotation annotation : element.getEAnnotations()) {
+			if (!visibility.isSourceVisible(annotation.getSource())) {
+				denied.add(annotation.getSource());
+			}
+		}
+	}
+
 	private void requireFullyAllowListed(EPackage ePackage) {
 		List<EClass> classes = ePackage.getEClassifiers().stream()
 				.filter(EClass.class::isInstance)

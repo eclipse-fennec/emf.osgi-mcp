@@ -19,6 +19,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -28,6 +29,7 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.fennec.emf.osgi.ResourceSetFactory;
+import org.eclipse.fennec.mcp.api.AnnotationVisibility;
 import org.eclipse.fennec.mcp.emf.tools.core.DatasetLimits;
 import org.eclipse.fennec.mcp.emf.tools.core.DatasetRegistry;
 import org.eclipse.fennec.mcp.emf.tools.core.ModelGuard;
@@ -137,6 +139,42 @@ class ExportPackageToolTest {
 	}
 
 	@Test
+	void aDeniedAnnotationSourceMakesTheWholePackageUnexportable() {
+		String error = callExpectingError(exportWith(fullGuard(), denying(TestModels.TYPE_MAPPING_SOURCE)),
+				Map.of("nsURI", TestModels.UPLINK_NS_URI));
+
+		// A .ecore carries every annotation and cannot be filtered without ceasing
+		// to be the package, so the export is refused rather than silently stripped
+		// - the same all-or-nothing rule the class allow-list already applies here.
+		assertThat(error).contains("withheld by the deployment").contains("describe_eclass");
+		// counted, never named
+		assertThat(error).doesNotContain(TestModels.TYPE_MAPPING_SOURCE);
+	}
+
+	@Test
+	void aPackageWithoutTheDeniedSourceStillExports() {
+		String ecore = content(exportWith(fullGuard(), denying("http://example.org/nothing/here/*")),
+				TestModels.UPLINK_NS_URI);
+
+		assertThat(ecore).contains(TestModels.TYPE_MAPPING_SOURCE);
+	}
+
+	@Test
+	void aSessionPackageIsExportedEvenWithADeniedSource() {
+		// The agent authored or imported this package itself, so withholding it
+		// from the agent protects nothing - the same reason the allow-list is not
+		// re-checked for session packages.
+		sessionPackages.register(SESSION, TestModels.annotatedPackage(TestModels.libraryPackage()));
+		ExportPackageTool tool = exportWith(guardFor(Set.of(), Set.of()),
+				denying(TestModels.TYPE_MAPPING_SOURCE));
+
+		Map<String, Object> result = call(tool, Map.of("nsURI", TestModels.UPLINK_NS_URI));
+
+		assertThat(result).containsEntry("origin", "session");
+		assertThat(String.valueOf(result.get("content"))).contains(TestModels.TYPE_MAPPING_SOURCE);
+	}
+
+	@Test
 	void aSessionRegisteredPackageIsExportableWithoutAnyAllowList() {
 		sessionPackages.register(SESSION, TestModels.libraryPackage());
 		// deny-all guard: the session package must not need an allow-list entry
@@ -179,9 +217,18 @@ class ExportPackageToolTest {
 		assertThat(error).contains("A .ecore document is XMI");
 	}
 
+	private static AnnotationVisibility denying(String... sourcePatterns) {
+		return AnnotationVisibility.denying(List.of(sourcePatterns), List.of());
+	}
+
 	private ExportPackageTool exportWith(ModelGuard guard) {
+		return exportWith(guard, AnnotationVisibility.unrestricted());
+	}
+
+	private ExportPackageTool exportWith(ModelGuard guard, AnnotationVisibility visibility) {
 		ExportPackageTool tool = new ExportPackageTool();
 		tool.guard = guard;
+		tool.visibility = visibility;
 		tool.packages = sessionPackages;
 		tool.registry = datasets;
 		tool.activate();

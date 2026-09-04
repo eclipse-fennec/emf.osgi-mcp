@@ -20,6 +20,7 @@ import java.util.Map;
 
 import org.eclipse.fennec.emf.osgi.metadata.MetadataService;
 import org.eclipse.fennec.emf.osgi.model.metadata.PackageMetadata;
+import org.eclipse.fennec.mcp.api.AnnotationVisibility;
 import org.eclipse.fennec.mcp.api.MCPTool;
 import org.eclipse.fennec.mcp.metadata.tools.core.AnnotationScanner;
 import org.eclipse.fennec.mcp.metadata.tools.core.MetadataViews;
@@ -49,6 +50,9 @@ public class ListAnnotationSourcesTool extends AbstractMetadataTool {
 
 	@Reference
 	MetadataService metadata;
+
+	@Reference
+	AnnotationVisibility visibility;
 
 	@Activate
 	void activate() {
@@ -85,7 +89,7 @@ public class ListAnnotationSourcesTool extends AbstractMetadataTool {
 				}
 			}
 
-			List<Map<String, Object>> sources = AnnotationScanner.scan(packages);
+			List<Map<String, Object>> sources = AnnotationScanner.scan(packages, visibility);
 
 			Map<String, Object> result = new LinkedHashMap<>();
 			result.put("scannedNsURI", nsURI);

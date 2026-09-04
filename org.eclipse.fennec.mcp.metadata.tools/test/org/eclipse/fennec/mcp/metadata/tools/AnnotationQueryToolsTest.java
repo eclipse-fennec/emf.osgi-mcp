@@ -25,6 +25,7 @@ import java.util.Map;
 import org.eclipse.fennec.codec.metadata.provider.CodecAspectProvider;
 import org.eclipse.fennec.emf.osgi.metadata.MetadataServices;
 import org.eclipse.fennec.emf.osgi.metadata.MetadataWhiteboard;
+import org.eclipse.fennec.mcp.api.AnnotationVisibility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -49,12 +50,15 @@ class AnnotationQueryToolsTest {
 
 		findClasses = new FindClassesByAnnotationTool();
 		findClasses.metadata = whiteboard;
+		findClasses.visibility = AnnotationVisibility.unrestricted();
 		findClasses.activate();
 		findFeatures = new FindFeaturesByAnnotationTool();
 		findFeatures.metadata = whiteboard;
+		findFeatures.visibility = AnnotationVisibility.unrestricted();
 		findFeatures.activate();
 		findOperations = new FindOperationsByAnnotationTool();
 		findOperations.metadata = whiteboard;
+		findOperations.visibility = AnnotationVisibility.unrestricted();
 		findOperations.activate();
 		findClassByName = new FindClassByNameTool();
 		findClassByName.metadata = whiteboard;

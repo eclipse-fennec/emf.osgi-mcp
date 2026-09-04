@@ -28,6 +28,7 @@ import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.fennec.mcp.api.UriPatterns;
 import org.eclipse.fennec.mcp.emf.tools.runtime.PackageRegistryPolicyDTO;
 import org.eclipse.fennec.mcp.emf.tools.runtime.RegisteredPackageDTO;
 import org.eclipse.fennec.mcp.emf.tools.runtime.SessionDTO;
@@ -355,18 +356,18 @@ public class PackageRegistry {
 	public boolean isRegistrable(String nsUri) {
 		return nsUri != null && !nsUri.isBlank()
 				&& !RESERVED_NS_URIS.contains(nsUri)
-				&& NsUriPatterns.matches(allowList, nsUri)
-				&& !NsUriPatterns.matches(denyList, nsUri);
+				&& UriPatterns.matches(allowList, nsUri)
+				&& !UriPatterns.matches(denyList, nsUri);
 	}
 
 	private void requireRegistrable(String nsUri) {
 		if (RESERVED_NS_URIS.contains(nsUri)) {
 			throw new ToolException(String.format("Namespace '%s' is a reserved platform package and cannot be registered", nsUri));
 		}
-		if (!NsUriPatterns.matches(allowList, nsUri)) {
+		if (!UriPatterns.matches(allowList, nsUri)) {
 			throw new ToolException(String.format("Namespace '%s' is not allow-listed for registration. An admin must add it to the EMFPackageRegistry nsuri.allowlist.", nsUri));
 		}
-		if (NsUriPatterns.matches(denyList, nsUri)) {
+		if (UriPatterns.matches(denyList, nsUri)) {
 			throw new ToolException(String.format("Namespace '%s' is deny-listed for registration", nsUri));
 		}
 	}
