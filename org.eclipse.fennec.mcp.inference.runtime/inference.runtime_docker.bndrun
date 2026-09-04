@@ -5,19 +5,29 @@
 # and binds the same port, so the two are alternative images and not layers.
 #
 # Kept in sync with launch.bndrun: identical -runrequires, therefore the identical resolved
-# -runbundles below. Three deliberate differences, all about running unattended in a
-# container rather than at a developer's terminal:
+# -runbundles below - a change to one belongs in both, and the two lists are meant to stay
+# diffable. Five deliberate differences, all about running unattended in a container rather
+# than at a developer's terminal:
 #
 #  1. No `-include: -secrets.bndrun`. Tokens and Model Atlas coordinates arrive as
 #     environment variables, which is what docker and compose hand a process; the
 #     interpolation plugin reads $[env:NAME] before $[prop:NAME], so the same configuration
 #     JSON serves both without a second copy.
-#  2. The Gogo shell runs non-interactively (-Dgosh.args=--nointeractive in the
-#     ENTRYPOINT) and the builtin console is off: a container has no terminal, and a shell
-#     blocking on stdin holds the framework open at shutdown.
+#  2. The Gogo shell runs non-interactively (gosh.args below) and the builtin console is
+#     off: a container has no terminal, and a shell blocking on stdin holds the framework
+#     open at shutdown.
 #  3. The whiteboard must bind 0.0.0.0 rather than the 127.0.0.1 of a local run, or nothing
 #     outside the container can reach it. That is a CONFIG value, not a bndrun one -
 #     MCP_INFERENCE_HTTP_HOST in inference.config's runtime.json, which the Dockerfile sets.
+#  4. `-runprovidedcapabilities: ${native_capability}` - an export resolves headless, with no
+#     framework to report the platform, so the resolver is told to assume the one it runs on.
+#     Nothing in this closure requires a native capability today; it keeps the export from
+#     failing if something ever does.
+#  5. `-resolve.effective: active` makes service requirements count during the resolve, so a
+#     missing service provider surfaces as an export failure in CI rather than as an endpoint
+#     that silently never comes up in the image. It can in principle pull a bundle a launch
+#     resolve would not - the -runbundles below are identical to launch.bndrun's today, and a
+#     diff between the two files is the check that this is still true.
 #
 # See docker/inference/README.md for the ports, the environment table, and why a token stops
 # being optional the moment the endpoint is reachable from outside the container.
@@ -30,9 +40,12 @@
 # overlay's config.json (base.uri) and model.atlas.mcp.config's publisher.json (the
 # publishing coordinates) as Configuration Admin delivers each configuration - which is what
 # lets one published image serve every deployment.
+# gosh.args lives here rather than as a -D in the Dockerfile ENTRYPOINT so the exported jar
+# is non-interactive however it is started - the README's bare `java -jar` check included.
 -runproperties: \
 	osgi.console=,\
 	osgi.console.enable.builtin=false,\
+	gosh.args=--nointeractive,\
 	felix.cm.config.plugins=org.apache.felix.configadmin.plugin.interpolation
 
 -runfw: org.apache.felix.framework;version='[7.0.5,7.0.5]'
