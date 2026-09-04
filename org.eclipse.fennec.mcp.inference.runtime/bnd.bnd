@@ -5,6 +5,21 @@ Bundle-Description: Resolution anchor for the metamodel-inference feature. Provi
  capability; the base EMF MCP runtime resolves and runs without any of it.
 -workingset: emf
 
+# The bndruns name these bundles only by identity in -runbundles, which tells bnd where to
+# find them but tells GRADLE nothing: without -dependson, `export.launch` and
+# `export.inference.runtime_docker` resolve against whatever copy of them the workspace
+# repository already holds, so an edit to a configurator JSON silently exports the PREVIOUS
+# one - an image built from stale config, with no error anywhere. Same reason the OSGi test
+# projects declare it.
+-dependson: \
+	org.eclipse.fennec.mcp.endpoint,\
+	org.eclipse.fennec.mcp.emf.tools,\
+	org.eclipse.fennec.mcp.metadata.tools,\
+	org.eclipse.fennec.mcp.tool.provider,\
+	org.eclipse.fennec.mcp.http.component,\
+	org.eclipse.fennec.mcp.inference.config,\
+	org.eclipse.fennec.mcp.emf.runtime.config.atlas
+
 -buildpath: \
 	org.osgi.framework;version=latest,\
 	org.osgi.namespace.implementation;version=latest,\

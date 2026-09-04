@@ -2,7 +2,9 @@
 	":configurator:resource-version": 1,
 
 	"org.eclipse.fennec.model.atlas.rest.client~jena": {
-		"base.uri": "http://localhost:8080/atlas/rest",
+		"base.uri": "$[env:MODEL_ATLAS_BASE_URI;default=$[prop:MODEL_ATLAS_BASE_URI;default=http://localhost:8080/atlas/rest]]",
+
+		"_comment": "Read side. Deliberately the SAME variable ModelAtlasPublisher~publisher reads for its own base.uri: a deployment reads the EPackages of, and publishes back to, one atlas, so one value configures both. The default is where model.atlas's docker-compose-jena.yml puts a local container, which keeps a local run working with nothing set. Note the scopes below stay literal - the overlay exists to name the jena scope, and the publishing scope is a separate decision (MODEL_ATLAS_PUBLISHING_SCOPE).",
 
 		"mode": "EAGER",
 		"eager.scopes": [
