@@ -95,6 +95,42 @@ tool. It is the "read narrow to copy" half of the division of labour with
 [`org.eclipse.fennec.mcp.metadata.tools`](metadata-discovery-tools.md), which
 queries wide to *locate* a model.
 
+## Addressing a model version: `fingerprint`
+
+`list_metamodel`, `describe_eclass` and `export_package` all read through the
+package registry, which maps **one nsURI to one package**. When a namespace has
+several registered model versions — the same model imported twice with diverging
+content, or read from two model.atlas stages — the registry holds one of them and
+cannot say that the others exist.
+
+All three therefore accept an optional `fingerprint`, which resolves through the
+metadata layer instead (keyed by model version, not by namespace):
+
+```
+list_metamodel(fingerprint="fp1:9c14…")          → that version's classes
+describe_eclass(eClass="…#//Book", fingerprint="fp1:9c14…")
+export_package(nsURI="…", fingerprint="fp1:9c14…")
+```
+
+Two rules follow, and both are refusals rather than best guesses:
+
+- **An nsURI that maps to several registered versions is refused**, with the
+  fingerprints listed. The registry would otherwise answer about whichever single
+  package it holds, with nothing in the result saying another version exists.
+- **`export_package` refuses a version mismatch.** If the namespace resolves to a
+  different version than the fingerprint names — which is possible on the
+  session-first path, where the session's own package wins — nothing is exported.
+  An export is a whole model leaving the runtime; handing back the wrong version
+  silently is the failure worth refusing.
+
+Every result now carries the `modelFingerprint` of what was actually read, so a
+report can state which version it describes.
+
+Where no metadata layer is deployed the behaviour is unchanged: nsURI addressing
+works exactly as before, `modelFingerprint` is absent, and a `fingerprint`
+argument is refused with that explanation. Find fingerprints with
+`describe_package_metadata` or `describe_metadata_status` in the metadata tools.
+
 ## Composite authoring: the whole package in one call
 
 An agent pays an iteration per tool call, and the authoring tools chain on ids:

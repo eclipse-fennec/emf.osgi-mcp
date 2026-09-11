@@ -24,7 +24,7 @@ import org.eclipse.fennec.mcp.api.AnnotationVisibility;
 import org.eclipse.fennec.mcp.api.MCPTool;
 import org.eclipse.fennec.mcp.metadata.tools.core.AnnotationScanner;
 import org.eclipse.fennec.mcp.metadata.tools.core.MetadataViews;
-import org.eclipse.fennec.mcp.metadata.tools.core.ToolException;
+import org.eclipse.fennec.mcp.metadata.tools.core.PackageSelector;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
@@ -61,14 +61,18 @@ public class ListAnnotationSourcesTool extends AbstractMetadataTool {
 				+ "detail keys it uses, how many elements carry it, and which namespaces it appears in. START "
 				+ "HERE when you do not know a runtime's annotation vocabulary: find_classes_by_annotation and "
 				+ "its siblings need an exact source URI, and a wrong one matches nothing without any error. "
-				+ "Omit 'nsURI' to scan every registered package.";
+				+ "Omit both arguments to scan every registered package version.";
 		this.inputSchema = """
 				{
 					"type": "object",
 					"properties": {
 						"nsURI": {
 							"type": "string",
-							"description": "Optional. Restrict the scan to one package's namespace URI. Omit to scan every registered package."
+							"description": "Optional. Restrict the scan to one package's namespace URI. Omit to scan every registered package. Refused when that namespace holds more than one registered version - pass 'fingerprint' instead."
+						},
+						"fingerprint": {
+							"type": "string",
+							"description": "Optional. Restrict the scan to one model version exactly, e.g. 'fp1:14466a0b5de879a6'."
 						}
 					}
 				}
@@ -79,20 +83,15 @@ public class ListAnnotationSourcesTool extends AbstractMetadataTool {
 	public Mono<McpSchema.CallToolResult> execute(McpAsyncServerExchange exchange, Map<String, Object> arguments) {
 		return run(() -> {
 			String nsURI = optionalString(arguments, "nsURI");
-			List<PackageMetadata> packages = MetadataViews.packages(metadata);
-			if (nsURI != null) {
-				packages = packages.stream().filter(p -> nsURI.equals(p.getNsURI())).toList();
-				if (packages.isEmpty()) {
-					throw new ToolException(String.format(
-							"No package is registered under namespace '%s'. Call describe_metadata_status "
-									+ "to see which namespaces are known to this runtime.", nsURI));
-				}
-			}
+			String fingerprint = optionalString(arguments, "fingerprint");
+			PackageMetadata scope = PackageSelector.scope(metadata, nsURI, fingerprint);
+			List<PackageMetadata> packages = scope == null ? MetadataViews.packages(metadata) : List.of(scope);
 
 			List<Map<String, Object>> sources = AnnotationScanner.scan(packages, visibility);
 
 			Map<String, Object> result = new LinkedHashMap<>();
-			result.put("scannedNsURI", nsURI);
+			result.put("scannedNsURI", scope == null ? null : scope.getNsURI());
+			result.put("scannedFingerprint", scope == null ? null : scope.getModelFingerprint());
 			result.put("scannedPackageVersions", packages.size());
 			result.put("count", sources.size());
 			result.put("annotationSources", sources);

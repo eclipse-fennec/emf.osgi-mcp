@@ -20,9 +20,11 @@ import java.util.Map;
 
 import org.eclipse.fennec.emf.osgi.metadata.MetadataService;
 import org.eclipse.fennec.emf.osgi.model.metadata.ClassMetadata;
+import org.eclipse.fennec.emf.osgi.model.metadata.PackageMetadata;
 import org.eclipse.fennec.mcp.api.AnnotationVisibility;
 import org.eclipse.fennec.mcp.api.MCPTool;
 import org.eclipse.fennec.mcp.metadata.tools.core.MetadataViews;
+import org.eclipse.fennec.mcp.metadata.tools.core.PackageSelector;
 import org.eclipse.fennec.mcp.metadata.tools.core.ToolException;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -79,6 +81,14 @@ public class FindClassesByAnnotationTool extends AbstractMetadataTool {
 						"value": {
 							"type": "string",
 							"description": "Optional. The detail value to match exactly. OMIT IT to match any value for the key - that is how you find every class carrying the key at all."
+						},
+						"nsURI": {
+							"type": "string",
+							"description": "Optional. Restrict the query to one package's namespace URI. Refused when that namespace holds more than one registered version - pass 'fingerprint' instead."
+						},
+						"fingerprint": {
+							"type": "string",
+							"description": "Optional. Restrict the query to one model version exactly, e.g. 'fp1:14466a0b5de879a6'. Without it the query spans every registered version, and two versions of one namespace both answer - each hit says which via its 'modelFingerprint'."
 						}
 					},
 					"required": ["annotationSource", "key"]
@@ -99,9 +109,14 @@ public class FindClassesByAnnotationTool extends AbstractMetadataTool {
 			}
 			String key = requireString(arguments, "key");
 			String value = optionalString(arguments, "value");
+			String nsURI = optionalString(arguments, "nsURI");
+			String fingerprint = optionalString(arguments, "fingerprint");
+			PackageMetadata scope = PackageSelector.scope(metadata, nsURI, fingerprint);
 
 			List<ClassMetadata> found = MetadataViews.requireIndex(metadata)
-					.findClassesByAnnotation(source, key, value);
+					.findClassesByAnnotation(source, key, value).stream()
+					.filter(classMetadata -> PackageSelector.owns(scope, classMetadata))
+					.toList();
 			List<Map<String, Object>> classes = MetadataViews.hits(found, classMetadata -> {
 				Map<String, Object> hit = MetadataViews.classHit(classMetadata);
 				hit.put("matched", MetadataViews.matchedAnnotation(classMetadata.getEClass(), source, key));
@@ -109,19 +124,22 @@ public class FindClassesByAnnotationTool extends AbstractMetadataTool {
 			});
 
 			Map<String, Object> result = new LinkedHashMap<>();
-			result.put("query", query(source, key, value));
+			result.put("query", query(source, key, value, nsURI, fingerprint));
 			result.put("count", classes.size());
 			result.put("classes", classes);
 			return result;
 		});
 	}
 
-	static Map<String, Object> query(String source, String key, String value) {
+	static Map<String, Object> query(String source, String key, String value, String nsURI, String fingerprint) {
 		Map<String, Object> query = new LinkedHashMap<>();
 		query.put("annotationSource", source);
 		query.put("key", key);
 		query.put("value", value);
 		query.put("matchedAnyValue", value == null);
+		query.put("nsURI", nsURI);
+		query.put("fingerprint", fingerprint);
+		query.put("searchedAllVersions", nsURI == null && fingerprint == null);
 		return query;
 	}
 }

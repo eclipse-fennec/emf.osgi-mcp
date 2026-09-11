@@ -19,6 +19,7 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.StringJoiner;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -28,6 +29,8 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.emf.osgi.ResourceSetFactory;
+import org.eclipse.fennec.emf.osgi.metadata.MetadataService;
+import org.eclipse.fennec.emf.osgi.model.metadata.PackageMetadata;
 import org.eclipse.fennec.mcp.api.UriPatterns;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -35,6 +38,7 @@ import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Modified;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicy;
 import org.osgi.service.component.annotations.ReferencePolicyOption;
 import org.osgi.service.metatype.annotations.Designate;
 
@@ -82,6 +86,15 @@ public class ModelGuard {
 	/** Session-local authored/imported packages; optional (may be absent in tests or minimal runtimes). */
 	@Reference(cardinality = ReferenceCardinality.OPTIONAL, policyOption = ReferencePolicyOption.GREEDY)
 	private volatile PackageRegistry sessionPackages;
+
+	/**
+	 * The metadata layer, when deployed. It is what makes a model <em>version</em>
+	 * addressable: an {@link EPackage.Registry} is keyed by namespace URI and holds
+	 * one package per nsURI, so without this there is nothing to tell two registered
+	 * versions of one namespace apart - and no way to notice that there are two.
+	 */
+	@Reference(cardinality = ReferenceCardinality.OPTIONAL, policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY)
+	private volatile MetadataService metadata;
 
 	private volatile Set<String> packageAllowList = Set.of();
 	private volatile Set<String> classAllowList = Set.of();
@@ -223,6 +236,100 @@ public class ModelGuard {
 	}
 
 	/**
+	 * Resolves an allow-listed package addressed by namespace URI, by model
+	 * fingerprint, or by both.
+	 * <p>
+	 * A fingerprint resolves through the metadata layer, which is keyed by model
+	 * version, and so reaches a specific version of a namespace that holds several -
+	 * something the package registry cannot express, since it maps one nsURI to one
+	 * package. An nsURI alone is refused when the metadata layer knows of more than
+	 * one registered version of it: the registry would answer with whichever single
+	 * package it happens to hold, and nothing in the result would say that another
+	 * version exists or that this is not it.
+	 * <p>
+	 * The allow-list applies identically on both paths, and is checked before
+	 * anything is resolved.
+	 *
+	 * @param nsUri       the package namespace URI, or {@code null} when a fingerprint is given
+	 * @param fingerprint the model fingerprint, or {@code null} to address by nsURI
+	 * @return the package, never {@code null}
+	 * @throws ToolException if neither key is given, the package is not allow-listed,
+	 *         nothing matches, the two keys disagree, or the nsURI is ambiguous
+	 */
+	public EPackage requireAllowedPackage(String nsUri, String fingerprint) {
+		if (fingerprint == null) {
+			requireUnambiguous(nsUri);
+			return requireAllowedPackage(nsUri);
+		}
+		if (metadata == null) {
+			throw new ToolException("This runtime has no metadata layer deployed, so a model fingerprint cannot "
+					+ "be resolved. Address the package by 'nsURI' instead.");
+		}
+		PackageMetadata version = metadata.getPackageMetadataByFingerprint(fingerprint)
+				.orElseThrow(() -> new ToolException(String.format(
+						"No model version with fingerprint '%s' is registered in this runtime.", fingerprint)));
+		if (nsUri != null && !nsUri.equals(version.getNsURI())) {
+			throw new ToolException(String.format(
+					"Fingerprint '%s' identifies a model version of namespace '%s', not the '%s' that was also "
+							+ "given. Pass one of the two.", fingerprint, version.getNsURI(), nsUri));
+		}
+		String resolvedNsUri = version.getNsURI();
+		if (!UriPatterns.matches(packageAllowList, resolvedNsUri)) {
+			throw new ToolException(String.format(
+					"EPackage '%s' is not allow-listed. Use list_metamodel to see the available packages.",
+					resolvedNsUri));
+		}
+		EPackage ePackage = version.getEPackage();
+		if (ePackage == null) {
+			throw new ToolException(String.format(
+					"Model version '%s' is registered but carries no resolvable EPackage", fingerprint));
+		}
+		return ePackage;
+	}
+
+	/**
+	 * Refuses an nsURI that the metadata layer knows several registered versions of.
+	 * A no-op without the metadata layer, which is the deployment that cannot tell
+	 * versions apart in the first place.
+	 *
+	 * @param nsUri the namespace URI
+	 * @throws ToolException if more than one version is registered under it
+	 */
+	private void requireUnambiguous(String nsUri) {
+		if (metadata == null || nsUri == null) {
+			return;
+		}
+		List<PackageMetadata> versions = metadata.getPackageMetadataVersions(nsUri);
+		if (versions.size() <= 1) {
+			return;
+		}
+		StringJoiner listed = new StringJoiner("; ");
+		versions.forEach(version -> listed.add(String.valueOf(version.getModelFingerprint())));
+		throw new ToolException(String.format(
+				"Namespace '%s' holds %d registered model versions, so it does not identify one and this tool "
+						+ "will not guess which was meant. Pass 'fingerprint' to choose one of: %s.",
+				nsUri, versions.size(), listed));
+	}
+
+	/**
+	 * The fingerprint of a resolved package, for reporting <em>which</em> version a
+	 * result describes.
+	 * <p>
+	 * Goes through the metadata layer's resolve-or-build path, so it answers for a
+	 * package that was never registered there - a memoized read, not a registration.
+	 *
+	 * @param ePackage the package
+	 * @return the fingerprint, or {@code null} without a metadata layer
+	 */
+	public String fingerprintOf(EPackage ePackage) {
+		MetadataService service = this.metadata;
+		if (service == null || ePackage == null) {
+			return null;
+		}
+		return service.getPackageMetadata(ePackage).map(PackageMetadata::getModelFingerprint).orElse(null);
+	}
+
+	/**
 	 * Resolves an allow-listed package by namespace URI.
 	 * @param nsUri the package namespace URI
 	 * @return the package, never {@code null}
@@ -281,13 +388,30 @@ public class ModelGuard {
 	 * @throws ToolException if the reference is malformed, denied, unknown or not an EClass
 	 */
 	public EClass requireAllowedEClassForRead(String eClassRef) {
+		return requireAllowedEClassForRead(eClassRef, null);
+	}
+
+	/**
+	 * As {@link #requireAllowedEClassForRead(String)}, but addressing a specific
+	 * model version.
+	 * <p>
+	 * A class identifier names a namespace, not a version, so where a namespace
+	 * holds several the identifier alone is ambiguous and is refused. The
+	 * fingerprint resolves that, and is checked against the identifier's nsURI.
+	 *
+	 * @param eClassRef   the class identifier
+	 * @param fingerprint the model fingerprint, or {@code null} to address by nsURI
+	 * @return the resolved EClass, never {@code null}
+	 * @throws ToolException if the reference is malformed, denied, unknown, ambiguous or not an EClass
+	 */
+	public EClass requireAllowedEClassForRead(String eClassRef, String fingerprint) {
 		if (eClassRef == null || !eClassRef.contains(CLASS_REF_SEPARATOR)) {
 			throw new ToolException("Parameter 'eClass' must have the form <nsURI>#//<ClassName>");
 		}
 		int separator = eClassRef.indexOf(CLASS_REF_SEPARATOR);
 		String nsUri = eClassRef.substring(0, separator);
 		String className = eClassRef.substring(separator + CLASS_REF_SEPARATOR.length());
-		EPackage ePackage = requireAllowedPackage(nsUri);
+		EPackage ePackage = requireAllowedPackage(nsUri, fingerprint);
 		EClassifier classifier = ePackage.getEClassifier(className);
 		if (!(classifier instanceof EClass eClass)) {
 			throw new ToolException(String.format("'%s' is not an EClass of package '%s'. Use list_metamodel to see the available classes.", className, nsUri));

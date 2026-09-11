@@ -30,6 +30,7 @@ import org.eclipse.fennec.mcp.api.MCPTool;
 import org.eclipse.fennec.mcp.metadata.tools.core.AspectRenderer;
 import org.eclipse.fennec.mcp.metadata.tools.core.ElementReference;
 import org.eclipse.fennec.mcp.metadata.tools.core.MetadataViews;
+import org.eclipse.fennec.mcp.metadata.tools.core.PackageSelector;
 import org.eclipse.fennec.mcp.metadata.tools.core.ToolException;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -71,11 +72,17 @@ public class DescribeAspectsTool extends AbstractMetadataTool {
 				+ "of element, which is otherwise silent. For a 'codec' aspect the content is the class's "
 				+ "serialization configuration (mapId, discriminator value, inheritance and strictness flags), "
 				+ "so this is the tool that shows how a sibling class is wired up. Omit 'aspectTypeId' for all "
-				+ "aspects on the element; list_aspects shows which type ids exist here.";
+				+ "aspects on the element; list_aspects shows which type ids exist here. An element reference names "
+				+ "a namespace, not a model version: where a namespace holds several, pass 'fingerprint' - the "
+				+ "call is refused rather than answered about whichever version registered last.";
 		this.inputSchema = """
 				{
 					"type": "object",
 					"properties": {
+						"fingerprint": {
+							"type": "string",
+							"description": "Optional. The model fingerprint the element belongs to, e.g. 'fp1:14466a0b5de879a6'. Required when the element's namespace holds more than one registered version, since the reference alone cannot tell them apart; otherwise omit it."
+						},
 						"element": {
 							"type": "string",
 							"description": "The element to read: '<nsURI>' for a package, '<nsURI>#//<ClassName>' for a class, or '<nsURI>#//<ClassName>/<featureOrOperation>' for a member."
@@ -95,15 +102,27 @@ public class DescribeAspectsTool extends AbstractMetadataTool {
 		return run(() -> {
 			ElementReference element = ElementReference.parse(requireString(arguments, "element"));
 			String aspectTypeId = optionalString(arguments, "aspectTypeId");
+			if (element.kind() != ElementReference.Kind.PACKAGE) {
+				// Class and member lookups go through the index. Check it first: with no index
+				// bound every namespace looks unregistered, and reporting that as "no such
+				// package" would send the caller after a model that is in fact right there.
+				MetadataViews.requireIndex(metadata);
+			}
+			// Resolved up front for every kind: an element reference carries an nsURI, which
+			// does not identify a model version, so this is where an ambiguous namespace is
+			// refused instead of silently resolving to the newest registration.
+			PackageMetadata version = PackageSelector.require(metadata, element.nsURI(),
+					optionalString(arguments, "fingerprint"));
 
 			Map<String, Object> result = new LinkedHashMap<>();
 			result.put("element", element.reference());
+			result.put("modelFingerprint", version.getModelFingerprint());
 			result.put("aspectTypeId", aspectTypeId);
 
 			EList<AspectEntry> aspects = switch (element.kind()) {
-				case PACKAGE -> describePackage(element, result);
-				case CLASS -> describeClass(element, result);
-				case MEMBER -> describeMember(element, result);
+				case PACKAGE -> describePackage(version, result);
+				case CLASS -> describeClass(element, version, result);
+				case MEMBER -> describeMember(element, version, result);
 			};
 
 			List<Map<String, Object>> rendered = AspectRenderer.render(aspects, aspectTypeId, visibility);
@@ -116,25 +135,23 @@ public class DescribeAspectsTool extends AbstractMetadataTool {
 		});
 	}
 
-	private EList<AspectEntry> describePackage(ElementReference element, Map<String, Object> result) {
-		PackageMetadata packageMetadata = metadata.getPackageMetadata(element.nsURI())
-				.orElseThrow(() -> new ToolException(String.format(
-						"No package is registered under namespace '%s'. Call describe_metadata_status to see "
-								+ "which namespaces are known to this runtime.", element.nsURI())));
+	private EList<AspectEntry> describePackage(PackageMetadata packageMetadata, Map<String, Object> result) {
 		result.put("kind", "package");
 		result.put("resolved", packageView(packageMetadata));
 		return packageMetadata.getAspects();
 	}
 
-	private EList<AspectEntry> describeClass(ElementReference element, Map<String, Object> result) {
-		ClassMetadata classMetadata = requireClass(element);
+	private EList<AspectEntry> describeClass(ElementReference element, PackageMetadata version,
+			Map<String, Object> result) {
+		ClassMetadata classMetadata = requireClass(element, version);
 		result.put("kind", "class");
 		result.put("resolved", MetadataViews.classHit(classMetadata));
 		return classMetadata.getAspects();
 	}
 
-	private EList<AspectEntry> describeMember(ElementReference element, Map<String, Object> result) {
-		ClassMetadata classMetadata = requireClass(element);
+	private EList<AspectEntry> describeMember(ElementReference element, PackageMetadata version,
+			Map<String, Object> result) {
+		ClassMetadata classMetadata = requireClass(element, version);
 		for (FeatureMetadata feature : classMetadata.getFeatures()) {
 			if (element.memberName().equals(feature.getName())) {
 				result.put("kind", "feature");
@@ -154,12 +171,20 @@ public class DescribeAspectsTool extends AbstractMetadataTool {
 				MetadataViews.classReference(classMetadata), element.memberName()));
 	}
 
-	private ClassMetadata requireClass(ElementReference element) {
-		return MetadataViews.requireIndex(metadata)
-				.findByClassName(element.nsURI(), element.className())
+	/**
+	 * The class of that exact model version. Deliberately not
+	 * {@code findByClassName(nsURI, name)}, which answers with the newest version of
+	 * the class and would quietly describe the aspects of a model the caller did not
+	 * address.
+	 */
+	private ClassMetadata requireClass(ElementReference element, PackageMetadata version) {
+		return MetadataViews.requireIndex(metadata).findAllByClassName(element.className()).stream()
+				.filter(classMetadata -> PackageSelector.owns(version, classMetadata))
+				.findFirst()
 				.orElseThrow(() -> new ToolException(String.format(
-						"No class '%s' is registered under namespace '%s'. Use find_class_by_name to locate it "
-								+ "across packages.", element.className(), element.nsURI())));
+						"No class '%s' is registered in the model version '%s' of namespace '%s'. Use "
+								+ "find_class_by_name to locate it across packages.",
+						element.className(), version.getModelFingerprint(), element.nsURI())));
 	}
 
 	private static Map<String, Object> packageView(PackageMetadata packageMetadata) {

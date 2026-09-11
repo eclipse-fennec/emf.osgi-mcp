@@ -13,17 +13,65 @@ codec dependency.
 
 ## The tools
 
+Every tool that takes an `nsURI` also takes a `fingerprint` — see
+[Addressing a model version](#addressing-a-model-version).
+
 | `tool.name` | Inputs | What it answers |
 |---|---|---|
-| `list_annotation_sources` | `nsURI?` | which EAnnotation sources exist here, with their detail keys, hit counts and namespaces |
-| `find_classes_by_annotation` | `annotationSource`, `key`, `value?` | every EClass carrying that detail, across all packages |
-| `find_features_by_annotation` | `annotationSource`, `key`, `value?` | the same for EAttributes and EReferences |
-| `find_operations_by_annotation` | `annotationSource`, `key`, `value?` | the same for EOperations |
-| `find_class_by_name` | `className`, `nsURI?` | a bare class name resolved to `<nsURI>#//<Name>` |
-| `list_aspects` | — | which aspect type ids are present, and on which element kinds |
-| `describe_aspects` | `element`, `aspectTypeId?` | one element's parsed aspect entries, with their **diagnostics** |
-| `describe_package_metadata` | `nsURI` | one package: classes, fingerprint, origin, properties, all registered versions |
-| `describe_metadata_status` | — | wiring diagnostics: index bound? how many packages? which namespaces? |
+| `list_annotation_sources` | `nsURI?`, `fingerprint?` | which EAnnotation sources exist here, with their detail keys, hit counts and namespaces |
+| `find_classes_by_annotation` | `annotationSource`, `key`, `value?`, `nsURI?`, `fingerprint?` | every EClass carrying that detail, across all packages |
+| `find_features_by_annotation` | `annotationSource`, `key`, `value?`, `nsURI?`, `fingerprint?` | the same for EAttributes and EReferences |
+| `find_operations_by_annotation` | `annotationSource`, `key`, `value?`, `nsURI?`, `fingerprint?` | the same for EOperations |
+| `find_class_by_name` | `className`, `nsURI?`, `fingerprint?` | a bare class name resolved to `<nsURI>#//<Name>` |
+| `list_aspects` | `nsURI?`, `fingerprint?` | which aspect type ids are present, and on which element kinds |
+| `describe_aspects` | `element`, `aspectTypeId?`, `fingerprint?` | one element's parsed aspect entries, with their **diagnostics** |
+| `describe_package_metadata` | `nsURI` \| `fingerprint` | one model version: classes, fingerprint, origin, properties, all registered versions of its namespace |
+| `describe_metadata_status` | — | wiring diagnostics: index bound? how many packages? which namespaces, with the fingerprints of every version |
+
+### Addressing a model version
+
+**A namespace URI is not an identity.** Registration in the metadata layer is keyed
+by *model fingerprint*, so one nsURI can hold several concurrently registered
+versions — the same model at two model.atlas stages, say, where draft and
+released differ in content but share a namespace.
+
+Where that happens, an nsURI does not say which version is meant, and these tools
+**refuse rather than guess**:
+
+```
+describe_package_metadata(nsURI="https://example.org/uplink")
+→ Namespace 'https://example.org/uplink' holds 2 registered model versions, so it
+  does not identify one and this lookup will not guess which was meant. Pass
+  'fingerprint' to choose one of: fp1:5f3a… (osgi-service, 5 class(es));
+  fp1:9c14… (session, 6 class(es)). Every tool in this bundle that takes an nsURI
+  takes a fingerprint instead.
+```
+
+The alternative — answering with the most recently registered version — is the
+dangerous one: the payload is well-formed, plausible, and about a model the caller
+did not ask for, with nothing in it to say so. A compliance finding attributed to
+the wrong stage reads exactly like a correct one.
+
+Each result also reports where its model version came from: `osgi-service` (an OSGi
+`EPackage` service, evidenced by `service.id`), `session` (registered by this MCP
+session, which announces with no properties at all), or `external` (registered by
+something else in the runtime — a remote model repository publishing what it
+resolved, say). The registrant's own properties are echoed verbatim by
+`describe_package_metadata`, and those say which. Provenance is read positively
+rather than by elimination, so a model read from elsewhere is never attributed to
+the caller's own session.
+
+`describe_metadata_status` needs no arguments, always answers, and lists every
+namespace with the fingerprints registered under it (plus `ambiguousNamespaces`),
+so the refusal above is one call away from being resolved.
+
+An nsURI holding exactly one version — the normal case — keeps working untouched.
+
+**Wide queries stay wide.** The three `find_*_by_annotation` tools search every
+registered version unless scoped, and two versions of one namespace both answer:
+each hit carries its own `modelFingerprint`, and results are de-duplicated per
+version rather than per `<nsURI>#//<Name>`. Scope a query with `fingerprint` (or
+`nsURI`, when unambiguous) to restrict it to one version.
 
 ### Omitting `value` means "any value"
 

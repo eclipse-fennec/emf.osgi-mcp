@@ -100,6 +100,10 @@ public class ExportPackageTool extends AbstractEMFTool {
 							"type": "string",
 							"description": "The namespace URI of the package to export, e.g. 'http://example.org/library'. Use list_registry for this session's packages and list_metamodel for the allow-listed OSGi ones."
 						},
+						"fingerprint": {
+							"type": "string",
+							"description": "Optional model fingerprint, e.g. 'fp1:14466a0b5de879a6'. Exports that model version and no other: if the namespace resolves to a different version the call is refused rather than exporting the wrong one. Needed whenever a namespace holds several registered versions."
+						},
 						"format": {
 							"type": "string",
 							"enum": ["xmi"],
@@ -116,6 +120,7 @@ public class ExportPackageTool extends AbstractEMFTool {
 		return run(() -> {
 			String sessionId = sessionId(exchange);
 			String nsURI = requireString(arguments, "nsURI");
+			String fingerprint = optionalString(arguments, "fingerprint");
 			String format = optionalString(arguments, "format");
 			if (format != null && !FORMAT.equals(format)) {
 				throw new ToolException(String.format("Unknown format '%s'. A .ecore document is XMI; use 'xmi'", format));
@@ -128,10 +133,23 @@ public class ExportPackageTool extends AbstractEMFTool {
 			EPackage ePackage = packages.resolve(sessionId, nsURI);
 			String origin = "session";
 			if (ePackage == null) {
-				ePackage = guard.requireAllowedPackage(nsURI);
+				ePackage = guard.requireAllowedPackage(nsURI, fingerprint);
 				origin = "osgi";
 				requireFullyAllowListed(ePackage);
 				requireEveryAnnotationVisible(ePackage);
+			}
+
+			// What actually got resolved. On the OSGi path with a fingerprint this is a
+			// tautology; it is the session path it guards, where the package was found by
+			// namespace and could be a different version of it than the one asked for.
+			// An export is a whole model leaving the runtime - exporting the wrong version
+			// silently is the failure worth refusing.
+			String resolvedFingerprint = guard.fingerprintOf(ePackage);
+			if (fingerprint != null && !fingerprint.equals(resolvedFingerprint)) {
+				throw new ToolException(String.format(
+						"Namespace '%s' resolves here to model version '%s', not the requested '%s', so nothing "
+								+ "was exported. The %s population holds a different version of this namespace.",
+						nsURI, resolvedFingerprint, fingerprint, origin));
 			}
 
 			String content = Exports.toEcore(ePackage);
@@ -140,6 +158,7 @@ public class ExportPackageTool extends AbstractEMFTool {
 			Map<String, Object> result = new LinkedHashMap<>();
 			result.put("nsURI", nsURI);
 			result.put("name", ePackage.getName());
+			result.put("modelFingerprint", resolvedFingerprint);
 			result.put("origin", origin);
 			result.put("format", FORMAT);
 			result.put("classifierCount", ePackage.getEClassifiers().size());

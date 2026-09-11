@@ -50,9 +50,13 @@ import org.eclipse.fennec.emf.osgi.model.metadata.PackageMetadata;
  * {@code export_package} are for.
  * <p>
  * Everything here sorts by nsURI then name and de-duplicates on the rendered
- * reference. The index keeps every registered <em>version</em> of a package, so
- * a raw query answers the same {@code <nsURI>#//<Name>} once per version;
- * {@code describe_package_metadata} is the tool that shows versions apart.
+ * reference <em>per model version</em>. The index keeps every registered version
+ * of a package, and two versions of one nsURI render the identical
+ * {@code <nsURI>#//<Name>}: de-duplicating on the reference alone would drop one
+ * of them and leave nothing in the payload to say so. Each hit therefore carries
+ * its {@code modelFingerprint}, and that is what tells the copies apart - both in
+ * the de-duplication key and for a reader. Restricting a query to one version is
+ * {@link PackageSelector}'s job.
  *
  * @author ilenia
  * @since Aug 26, 2026
@@ -66,9 +70,16 @@ public final class MetadataViews {
 	public static final String ORIGIN_SESSION = "session";
 
 	/**
-	 * Service property every OSGi service registration carries. Packages announced by
-	 * {@code PackageRegistry} go through {@code registerPackage(ePackage)} without
-	 * properties, so its presence is the cheap discriminator between the two populations.
+	 * Origin of a package registered by something else in this runtime - a remote model
+	 * repository publishing what it resolved, say. Which one is not this bundle's business
+	 * to know: the registrant's own properties are reported verbatim by
+	 * {@code describe_package_metadata} and say where it came from.
+	 */
+	public static final String ORIGIN_EXTERNAL = "external";
+
+	/**
+	 * Service property every OSGi service registration carries, and the only positive
+	 * evidence that a package arrived as one.
 	 */
 	private static final String SERVICE_ID = "service.id";
 
@@ -106,14 +117,27 @@ public final class MetadataViews {
 	}
 
 	/**
+	 * Where a registered model version came from.
+	 * <p>
+	 * Read positively rather than by elimination, which is what makes it trustworthy in a
+	 * report. An OSGi service registration carries {@code service.id};
+	 * {@code PackageRegistry} announces a session's own packages through
+	 * {@code registerPackage(ePackage)} with <em>no</em> properties at all; anything else
+	 * was registered with build context by a third party and is neither. Treating that
+	 * last case as a session package - which the earlier two-way split did - attributes a
+	 * model to the caller's own session when it came from somewhere else entirely.
+	 *
 	 * @param packageMetadata a registered package
-	 * @return {@link #ORIGIN_OSGI} or {@link #ORIGIN_SESSION}
+	 * @return {@link #ORIGIN_OSGI}, {@link #ORIGIN_SESSION} or {@link #ORIGIN_EXTERNAL}
 	 */
 	public static String origin(PackageMetadata packageMetadata) {
-		if (packageMetadata == null) {
+		if (packageMetadata == null || packageMetadata.getProperties() == null) {
 			return ORIGIN_SESSION;
 		}
-		return packageMetadata.getProperties().containsKey(SERVICE_ID) ? ORIGIN_OSGI : ORIGIN_SESSION;
+		if (packageMetadata.getProperties().containsKey(SERVICE_ID)) {
+			return ORIGIN_OSGI;
+		}
+		return packageMetadata.getProperties().map().isEmpty() ? ORIGIN_SESSION : ORIGIN_EXTERNAL;
 	}
 
 	public static String nsURIOf(ClassMetadata classMetadata) {
@@ -161,6 +185,7 @@ public final class MetadataViews {
 		hit.put("name", classMetadata.getName());
 		hit.put("abstract", eClass != null && eClass.isAbstract());
 		hit.put("interface", eClass != null && eClass.isInterface());
+		hit.put("modelFingerprint", PackageSelector.fingerprintOf(classMetadata));
 		hit.put("origin", origin(classMetadata.getPackage()));
 		if (eClass != null) {
 			hit.put("eSuperTypes", eClass.getESuperTypes().stream()
@@ -193,6 +218,7 @@ public final class MetadataViews {
 		if (featureMetadata.getExtendedMetaDataName() != null) {
 			hit.put("extendedMetaDataName", featureMetadata.getExtendedMetaDataName());
 		}
+		hit.put("modelFingerprint", PackageSelector.fingerprintOf(owner));
 		hit.put("origin", origin(owner == null ? null : owner.getPackage()));
 		return hit;
 	}
@@ -221,6 +247,7 @@ public final class MetadataViews {
 			}
 			hit.put("parameters", parameters);
 		}
+		hit.put("modelFingerprint", PackageSelector.fingerprintOf(owner));
 		hit.put("origin", origin(owner == null ? null : owner.getPackage()));
 		return hit;
 	}
@@ -265,12 +292,13 @@ public final class MetadataViews {
 		rendered.sort(Comparator
 				.comparing((Map<String, Object> hit) -> string(hit, "nsURI"), Comparator.nullsLast(Comparator.naturalOrder()))
 				.thenComparing(hit -> string(hit, "className"), Comparator.nullsLast(Comparator.naturalOrder()))
-				.thenComparing(hit -> string(hit, "name"), Comparator.nullsLast(Comparator.naturalOrder())));
+				.thenComparing(hit -> string(hit, "name"), Comparator.nullsLast(Comparator.naturalOrder()))
+				.thenComparing(hit -> string(hit, "modelFingerprint"), Comparator.nullsLast(Comparator.naturalOrder())));
 		Set<String> seen = new LinkedHashSet<>();
 		List<Map<String, Object>> unique = new ArrayList<>(rendered.size());
 		for (Map<String, Object> hit : rendered) {
 			String reference = string(hit, "reference");
-			if (reference == null || seen.add(reference)) {
+			if (reference == null || seen.add(reference + "@" + string(hit, "modelFingerprint"))) {
 				unique.add(hit);
 			}
 		}

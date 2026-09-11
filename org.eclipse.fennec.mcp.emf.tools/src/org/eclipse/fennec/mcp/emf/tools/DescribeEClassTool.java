@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.mcp.emf.tools;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.eclipse.emf.ecore.EClass;
@@ -66,6 +67,10 @@ public class DescribeEClassTool extends AbstractEMFTool {
 						"eClass": {
 							"type": "string",
 							"description": "The EClass identifier of the form <nsURI>#//<ClassName>, e.g. 'http://example.org/library#//Book'"
+						},
+						"fingerprint": {
+							"type": "string",
+							"description": "Optional model fingerprint, e.g. 'fp1:14466a0b5de879a6', addressing one registered model version exactly. Needed when a namespace holds several registered versions, where an nsURI alone is refused rather than resolved to an arbitrary one. Use describe_package_metadata or describe_metadata_status (metadata tools) to find it."
 						}
 					},
 					"required": ["eClass"]
@@ -76,8 +81,11 @@ public class DescribeEClassTool extends AbstractEMFTool {
 	@Override
 	public Mono<McpSchema.CallToolResult> execute(McpAsyncServerExchange exchange, Map<String, Object> arguments) {
 		return run(() -> {
-			EClass eClass = guard.requireAllowedEClassForRead(requireString(arguments, "eClass"));
-			return EClassDescriber.describe(eClass, guard, visibility);
+			EClass eClass = guard.requireAllowedEClassForRead(requireString(arguments, "eClass"),
+					optionalString(arguments, "fingerprint"));
+			Map<String, Object> described = new LinkedHashMap<>(EClassDescriber.describe(eClass, guard, visibility));
+			described.put("modelFingerprint", guard.fingerprintOf(eClass.getEPackage()));
+			return described;
 		});
 	}
 }

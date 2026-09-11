@@ -48,7 +48,7 @@ public class ListMetamodelTool extends AbstractEMFTool {
 	void activate() {
 		this.name = "list_metamodel";
 		this.description = "Discover the EMF metamodel available for instance creation. " +
-				"Without arguments, lists the available EPackages. With 'nsURI', lists the " +
+				"Without arguments, lists the available EPackages. With 'nsURI' or 'fingerprint', lists the " +
 				"instantiable EClasses of that package. Use describe_eclass for feature details.";
 		this.inputSchema = """
 				{
@@ -57,6 +57,10 @@ public class ListMetamodelTool extends AbstractEMFTool {
 						"nsURI": {
 							"type": "string",
 							"description": "Optional namespace URI of an EPackage. If set, the instantiable EClasses of this package are returned."
+						},
+						"fingerprint": {
+							"type": "string",
+							"description": "Optional model fingerprint, e.g. 'fp1:14466a0b5de879a6', addressing one registered model version exactly. Needed when a namespace holds several registered versions, where an nsURI alone is refused rather than resolved to an arbitrary one. Use describe_package_metadata or describe_metadata_status (metadata tools) to find it."
 						}
 					}
 				}
@@ -67,13 +71,14 @@ public class ListMetamodelTool extends AbstractEMFTool {
 	public Mono<McpSchema.CallToolResult> execute(McpAsyncServerExchange exchange, Map<String, Object> arguments) {
 		return run(() -> {
 			String nsUri = optionalString(arguments, "nsURI");
-			if (nsUri == null) {
+			String fingerprint = optionalString(arguments, "fingerprint");
+			if (nsUri == null && fingerprint == null) {
 				List<Map<String, Object>> packages = guard.allowedPackages().stream()
 						.map(this::describePackage)
 						.toList();
 				return Map.of("ePackages", packages);
 			}
-			EPackage ePackage = guard.requireAllowedPackage(nsUri);
+			EPackage ePackage = guard.requireAllowedPackage(nsUri, fingerprint);
 			List<Map<String, Object>> classes = guard.allowedConcreteClasses(ePackage).stream()
 					.map(eClass -> {
 						Map<String, Object> entry = new LinkedHashMap<String, Object>();
@@ -82,7 +87,13 @@ public class ListMetamodelTool extends AbstractEMFTool {
 						return entry;
 					})
 					.toList();
-			return Map.of("nsURI", nsUri, "eClasses", classes);
+			Map<String, Object> result = new LinkedHashMap<>();
+			result.put("nsURI", ePackage.getNsURI());
+			// Which version this describes, so a result can be traced back to the model
+			// version it came from rather than only to a namespace.
+			result.put("modelFingerprint", guard.fingerprintOf(ePackage));
+			result.put("eClasses", classes);
+			return result;
 		});
 	}
 
@@ -90,6 +101,7 @@ public class ListMetamodelTool extends AbstractEMFTool {
 		Map<String, Object> entry = new LinkedHashMap<>();
 		entry.put("name", ePackage.getName());
 		entry.put("nsURI", ePackage.getNsURI());
+		entry.put("modelFingerprint", guard.fingerprintOf(ePackage));
 		entry.put("eClassCount", guard.allowedConcreteClasses(ePackage).size());
 		return entry;
 	}

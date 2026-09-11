@@ -20,9 +20,11 @@ import java.util.Map;
 
 import org.eclipse.fennec.emf.osgi.metadata.MetadataService;
 import org.eclipse.fennec.emf.osgi.model.metadata.OperationMetadata;
+import org.eclipse.fennec.emf.osgi.model.metadata.PackageMetadata;
 import org.eclipse.fennec.mcp.api.AnnotationVisibility;
 import org.eclipse.fennec.mcp.api.MCPTool;
 import org.eclipse.fennec.mcp.metadata.tools.core.MetadataViews;
+import org.eclipse.fennec.mcp.metadata.tools.core.PackageSelector;
 import org.eclipse.fennec.mcp.metadata.tools.core.ToolException;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -69,6 +71,14 @@ public class FindOperationsByAnnotationTool extends AbstractMetadataTool {
 						"value": {
 							"type": "string",
 							"description": "Optional. The detail value to match exactly. OMIT IT to match any value for the key."
+						},
+						"nsURI": {
+							"type": "string",
+							"description": "Optional. Restrict the query to one package's namespace URI. Refused when that namespace holds more than one registered version - pass 'fingerprint' instead."
+						},
+						"fingerprint": {
+							"type": "string",
+							"description": "Optional. Restrict the query to one model version exactly, e.g. 'fp1:14466a0b5de879a6'. Without it the query spans every registered version, and two versions of one namespace both answer - each hit says which via its 'modelFingerprint'."
 						}
 					},
 					"required": ["annotationSource", "key"]
@@ -89,9 +99,14 @@ public class FindOperationsByAnnotationTool extends AbstractMetadataTool {
 			}
 			String key = requireString(arguments, "key");
 			String value = optionalString(arguments, "value");
+			String nsURI = optionalString(arguments, "nsURI");
+			String fingerprint = optionalString(arguments, "fingerprint");
+			PackageMetadata scope = PackageSelector.scope(metadata, nsURI, fingerprint);
 
 			List<OperationMetadata> found = MetadataViews.requireIndex(metadata)
-					.findOperationsByAnnotation(source, key, value);
+					.findOperationsByAnnotation(source, key, value).stream()
+					.filter(operationMetadata -> PackageSelector.owns(scope, operationMetadata.getClassMetadata()))
+					.toList();
 			List<Map<String, Object>> operations = MetadataViews.hits(found, operationMetadata -> {
 				Map<String, Object> hit = MetadataViews.operationHit(operationMetadata);
 				hit.put("matched", MetadataViews.matchedAnnotation(operationMetadata.getEOperation(), source, key));
@@ -99,7 +114,7 @@ public class FindOperationsByAnnotationTool extends AbstractMetadataTool {
 			});
 
 			Map<String, Object> result = new LinkedHashMap<>();
-			result.put("query", FindClassesByAnnotationTool.query(source, key, value));
+			result.put("query", FindClassesByAnnotationTool.query(source, key, value, nsURI, fingerprint));
 			result.put("count", operations.size());
 			result.put("operations", operations);
 			return result;

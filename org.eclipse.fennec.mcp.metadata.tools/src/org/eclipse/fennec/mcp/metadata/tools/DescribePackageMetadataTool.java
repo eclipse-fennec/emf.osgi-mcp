@@ -27,7 +27,7 @@ import org.eclipse.fennec.emf.osgi.model.metadata.ClassMetadata;
 import org.eclipse.fennec.emf.osgi.model.metadata.PackageMetadata;
 import org.eclipse.fennec.mcp.api.MCPTool;
 import org.eclipse.fennec.mcp.metadata.tools.core.MetadataViews;
-import org.eclipse.fennec.mcp.metadata.tools.core.ToolException;
+import org.eclipse.fennec.mcp.metadata.tools.core.PackageSelector;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
@@ -37,14 +37,16 @@ import io.modelcontextprotocol.spec.McpSchema;
 import reactor.core.publisher.Mono;
 
 /**
- * MCP tool describing one registered package: its classes as references, its
- * registration origin and properties, and every registered version with its
- * model fingerprint.
+ * MCP tool describing one registered model version: its classes as references,
+ * its registration origin and properties, and every registered version of its
+ * namespace with their fingerprints.
  * <p>
  * Registration is keyed by model version, not by namespace, so one nsURI can
  * hold several concurrently registered versions. This is the tool that tells
- * them apart - the query tools de-duplicate on the class reference, which is
- * what an agent wants but hides the version fan-out.
+ * them apart, and the {@code versions} list it always returns is how a caller
+ * refused for an ambiguous nsURI learns which fingerprints exist - reachable
+ * here by naming any one of them, and by {@code describe_metadata_status}
+ * without naming anything.
  *
  * @author ilenia
  * @since Aug 26, 2026
@@ -58,21 +60,26 @@ public class DescribePackageMetadataTool extends AbstractMetadataTool {
 	@Activate
 	void activate() {
 		this.name = "describe_package_metadata";
-		this.description = "Describe one registered package by namespace URI: its class references, its model "
-				+ "fingerprint, whether it came from an OSGi service or from an MCP session, its registration "
-				+ "properties, the aspect type ids it carries, and every registered version of it. Registration "
-				+ "is keyed by model version rather than by namespace, so a namespace can legitimately hold "
-				+ "several versions at once; the other tools collapse them.";
+		this.description = "Describe one registered model version: its class references, its model fingerprint, "
+				+ "whether it came from an OSGi service or from an MCP session, its registration properties, the "
+				+ "aspect type ids it carries, and every registered version of its namespace. Address it by "
+				+ "'nsURI' or, exactly, by 'fingerprint'. Registration is keyed by model version rather than by "
+				+ "namespace, so a namespace can legitimately hold several versions at once (the same model at "
+				+ "two Atlas stages, say): where it does, an nsURI alone is REFUSED rather than answered with "
+				+ "the newest, and the error lists the fingerprints to choose from.";
 		this.inputSchema = """
 				{
 					"type": "object",
 					"properties": {
 						"nsURI": {
 							"type": "string",
-							"description": "The package namespace URI, e.g. 'https://eclipse.org/fennec/lorawan'"
+							"description": "The package namespace URI, e.g. 'https://eclipse.org/fennec/lorawan'. Refused when the namespace holds more than one registered version - pass 'fingerprint' instead."
+						},
+						"fingerprint": {
+							"type": "string",
+							"description": "The model fingerprint, e.g. 'fp1:14466a0b5de879a6'. Addresses one version exactly, which is the only way to pick between several versions of one namespace. Use describe_metadata_status to list them."
 						}
-					},
-					"required": ["nsURI"]
+					}
 				}
 				""";
 	}
@@ -80,14 +87,11 @@ public class DescribePackageMetadataTool extends AbstractMetadataTool {
 	@Override
 	public Mono<McpSchema.CallToolResult> execute(McpAsyncServerExchange exchange, Map<String, Object> arguments) {
 		return run(() -> {
-			String nsURI = requireString(arguments, "nsURI");
-			PackageMetadata current = metadata.getPackageMetadata(nsURI)
-					.orElseThrow(() -> new ToolException(String.format(
-							"No package is registered under namespace '%s'. Call describe_metadata_status to "
-									+ "see which namespaces are known to this runtime.", nsURI)));
-			List<PackageMetadata> versions = metadata.getPackageMetadataVersions(nsURI);
+			PackageMetadata addressed = PackageSelector.require(metadata,
+					optionalString(arguments, "nsURI"), optionalString(arguments, "fingerprint"));
+			List<PackageMetadata> versions = metadata.getPackageMetadataVersions(addressed.getNsURI());
 
-			Map<String, Object> result = new LinkedHashMap<>(describe(current));
+			Map<String, Object> result = new LinkedHashMap<>(describe(addressed));
 			result.put("versionCount", versions.size());
 			result.put("versions", versions.stream().map(DescribePackageMetadataTool::version).toList());
 			return result;
