@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import org.eclipse.emf.common.util.URI;
@@ -48,6 +49,18 @@ import tools.jackson.databind.json.JsonMapper;
  * @since Jan 23, 2026
  */
 public abstract class AbstractMCPTool implements MCPTool {
+
+	/**
+	 * The schema keywords {@link #loadSchema(String, ResourceSet)} suppresses.
+	 * <p>
+	 * Inert until the codec honours them: {@code EPackageToJsonSchemaConverter} guards
+	 * nine keywords with its suppression check and these two are not yet among them, so
+	 * today the option is read and never consulted for them. Set here regardless, so the
+	 * intent is stated where the schema is produced and takes effect as soon as the codec
+	 * side lands (eclipse-fennec/emf.osgi-mcp#44).
+	 */
+	private static final Set<String> IDENTITY_KEYWORDS = Set.of("$id", "$schema");
+
 	
 	protected String name;
 	protected String description;
@@ -115,7 +128,16 @@ public abstract class AbstractMCPTool implements MCPTool {
 	/**
 	 * Generates a JSON schema from an EMF EClass identified by its URI.
 	 * Uses the Fennec JSON Schema codec to serialize the EClass into a
-	 * self-contained JSON schema (all $refs inlined, no vendor extensions).
+	 * self-contained JSON schema: all {@code $ref}s inlined, no vendor extensions,
+	 * and no {@code $id} or {@code $schema}.
+	 * <p>
+	 * The identity keywords are dropped because of where this schema ends up. It is
+	 * nested inside a tool's {@code inputSchema}, which is a fragment of an MCP
+	 * {@code tools/list} response rather than a document of its own: it has no
+	 * retrievable identity for {@code $id} to name, and declaring a dialect with
+	 * {@code $schema} inside an enclosing schema is at best redundant and at worst
+	 * rejected by a strict consumer. Suppressing them here fixes every consumer at
+	 * once, rather than each one learning to ignore them.
 	 *
 	 * @param eClassUri  the EMF URI of the EClass to convert (e.g. {@code platform:/...#//MyClass})
 	 * @param resourceSet the EMF resource set capable of resolving the URI
@@ -137,6 +159,9 @@ public abstract class AbstractMCPTool implements MCPTool {
 			Map<String, Object> options = new HashMap<>();
 			options.put(CodecJsonSchemaOptions.OPTION_INLINE_REFS, true);
 			options.put(CodecJsonSchemaOptions.OPTION_SUPPRESS_VENDOR_EXTENSIONS, true);
+			// Keywords are matched literally, '$' included - the codec already suppresses
+			// "$comment" this way.
+			options.put(CodecJsonSchemaOptions.OPTION_SUPPRESS_KEYWORDS, IDENTITY_KEYWORDS);
 			ByteArrayOutputStream out = new ByteArrayOutputStream();
 			resource.save(out, options);
 			return out.toString(StandardCharsets.UTF_8);
