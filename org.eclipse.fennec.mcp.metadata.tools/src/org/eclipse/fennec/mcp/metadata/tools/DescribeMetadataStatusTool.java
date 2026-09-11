@@ -14,10 +14,11 @@
  */
 package org.eclipse.fennec.mcp.metadata.tools;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeSet;
+import java.util.TreeMap;
 
 import org.eclipse.fennec.emf.osgi.metadata.MetadataService;
 import org.eclipse.fennec.emf.osgi.model.metadata.PackageMetadata;
@@ -59,9 +60,12 @@ public class DescribeMetadataStatusTool extends AbstractMetadataTool {
 		this.name = "describe_metadata_status";
 		this.description = "Report how the metadata layer is wired here: whether a metadata index is bound, how "
 				+ "many package versions are registered, which namespaces are known, where they came from "
-				+ "(OSGi service or MCP session) and which aspect type ids are present. CALL THIS WHEN A LOOKUP "
-				+ "COMES BACK EMPTY: without an index bound, every query answers empty for a reason that has "
-				+ "nothing to do with what you asked. This tool works even then.";
+				+ "(OSGi service or MCP session) and which aspect type ids are present. Lists each namespace "
+				+ "with the fingerprint of every version registered under it, so this is also where you find "
+				+ "the fingerprint to pass when a namespace holds more than one version and a lookup refuses "
+				+ "to guess. CALL THIS WHEN A LOOKUP COMES BACK EMPTY OR IS REFUSED: without an index bound, "
+				+ "every query answers empty for a reason that has nothing to do with what you asked. This "
+				+ "tool works even then.";
 		this.inputSchema = """
 				{
 					"type": "object",
@@ -76,31 +80,44 @@ public class DescribeMetadataStatusTool extends AbstractMetadataTool {
 			boolean indexAvailable = metadata != null && metadata.getIndexReader().isPresent();
 			List<PackageMetadata> packages = MetadataViews.packages(metadata);
 
-			TreeSet<String> namespaces = new TreeSet<>();
-			int osgi = 0;
-			int session = 0;
+			// Keyed by nsURI so the fan-out is visible: a namespace with more than one entry
+			// is one every nsURI-addressed lookup will refuse, and these are the fingerprints
+			// that refusal asks for.
+			Map<String, List<Map<String, Object>>> byNamespace = new TreeMap<>();
+			Map<String, Integer> originCounts = new LinkedHashMap<>();
+			originCounts.put(MetadataViews.ORIGIN_OSGI, 0);
+			originCounts.put(MetadataViews.ORIGIN_SESSION, 0);
+			originCounts.put(MetadataViews.ORIGIN_EXTERNAL, 0);
 			for (PackageMetadata packageMetadata : packages) {
 				if (packageMetadata.getNsURI() != null) {
-					namespaces.add(packageMetadata.getNsURI());
+					Map<String, Object> version = new LinkedHashMap<>();
+					version.put("modelFingerprint", packageMetadata.getModelFingerprint());
+					version.put("origin", MetadataViews.origin(packageMetadata));
+					version.put("classCount", packageMetadata.getClasses().size());
+					byNamespace.computeIfAbsent(packageMetadata.getNsURI(), key -> new ArrayList<>()).add(version);
 				}
-				if (MetadataViews.ORIGIN_OSGI.equals(MetadataViews.origin(packageMetadata))) {
-					osgi++;
-				} else {
-					session++;
-				}
+				originCounts.merge(MetadataViews.origin(packageMetadata), 1, Integer::sum);
 			}
-
-			Map<String, Object> origins = new LinkedHashMap<>();
-			origins.put(MetadataViews.ORIGIN_OSGI, osgi);
-			origins.put(MetadataViews.ORIGIN_SESSION, session);
+			List<String> ambiguous = byNamespace.entrySet().stream()
+					.filter(entry -> entry.getValue().size() > 1)
+					.map(Map.Entry::getKey)
+					.toList();
 
 			Map<String, Object> result = new LinkedHashMap<>();
 			result.put("metadataServiceAvailable", metadata != null);
 			result.put("indexAvailable", indexAvailable);
 			result.put("registeredPackageVersions", packages.size());
-			result.put("distinctNamespaces", namespaces.size());
-			result.put("namespaces", List.copyOf(namespaces));
-			result.put("packageVersionsByOrigin", origins);
+			result.put("distinctNamespaces", byNamespace.size());
+			result.put("namespaces", List.copyOf(byNamespace.keySet()));
+			result.put("versionsByNamespace", byNamespace);
+			result.put("ambiguousNamespaces", ambiguous);
+			if (!ambiguous.isEmpty()) {
+				result.put("ambiguityNote", String.format(
+						"%d namespace(s) hold more than one registered model version. Addressing those by "
+								+ "nsURI alone is refused; pass the 'fingerprint' of the version you mean, "
+								+ "listed under versionsByNamespace.", ambiguous.size()));
+			}
+			result.put("packageVersionsByOrigin", originCounts);
 			result.put("aspectTypeIds", List.copyOf(AspectRenderer.summarize(packages, visibility).keySet()));
 			if (!indexAvailable) {
 				result.put("note", "No metadata index is bound, so every lookup tool in this bundle will "

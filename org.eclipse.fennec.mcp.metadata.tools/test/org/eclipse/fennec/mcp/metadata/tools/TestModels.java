@@ -105,6 +105,27 @@ final class TestModels {
 	}
 
 	/**
+	 * A second, diverging version of {@link #UPLINK_NS_URI}: same namespace, one extra
+	 * attribute, therefore a different model fingerprint.
+	 * <p>
+	 * This is the shape the Atlas produces when one model is staged twice - draft and
+	 * released under one nsURI - and the whole reason the read tools take a
+	 * fingerprint. Registering this alongside {@link #uplinkPackage()} gives the
+	 * metadata layer two coexisting trees for one namespace.
+	 *
+	 * @return the diverged version
+	 */
+	static EPackage divergedUplinkPackage() {
+		EPackage uplink = uplinkPackage();
+		EClass sensorA = (EClass) uplink.getEClassifier("SensorAUplink");
+		EAttribute added = EcoreFactory.eINSTANCE.createEAttribute();
+		added.setName("batteryLevel");
+		added.setEType(EcorePackage.Literals.EINT);
+		sensorA.getEStructuralFeatures().add(added);
+		return uplink;
+	}
+
+	/**
 	 * @return a second, unrelated package, so cross-package lookup has something to
 	 *         find that the caller never named
 	 */

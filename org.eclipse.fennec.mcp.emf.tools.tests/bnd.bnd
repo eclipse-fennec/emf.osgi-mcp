@@ -1,0 +1,29 @@
+Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE}
+Bundle-Name: Eclipse Fennec OSGi MCP EMF Model Tools OSGi Test
+Bundle-Description: Guards that the EMF model tools activate under OSGi and address a model \
+	version by fingerprint through the real DS wiring - reaching a version the EPackage.Registry \
+	cannot hold
+
+-library: \
+	enableOSGi-Test,\
+	enableEMF
+
+# The runtimes need these workspace bundles, but only by identity in the bndruns - which
+# creates no build order. Without this, a clean build resolves a runtime before the bundle
+# under test has been built and fails to find it.
+-dependson: \
+	org.eclipse.fennec.mcp.emf.tools,\
+	org.eclipse.fennec.mcp.metadata.tools
+
+-buildpath: \
+	org.osgi.framework;version=latest,\
+	org.osgi.service.cm;version=latest,\
+	org.eclipse.fennec.mcp.api;version=snapshot,\
+	org.eclipse.fennec.emf.osgi.metadata;version=latest,\
+	io.modelcontextprotocol.sdk.mcp-core;version=latest,\
+	io.projectreactor.reactor-core;version=latest,\
+	reactive-streams;version=latest
+
+Private-Package: org.eclipse.fennec.mcp.emf.tools.tests
+
+Bundle-Version: 1.0.0.SNAPSHOT

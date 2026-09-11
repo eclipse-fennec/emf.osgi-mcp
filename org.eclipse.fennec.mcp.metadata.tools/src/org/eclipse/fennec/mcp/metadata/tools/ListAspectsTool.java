@@ -20,10 +20,12 @@ import java.util.List;
 import java.util.Map;
 
 import org.eclipse.fennec.emf.osgi.metadata.MetadataService;
+import org.eclipse.fennec.emf.osgi.model.metadata.PackageMetadata;
 import org.eclipse.fennec.mcp.api.AnnotationVisibility;
 import org.eclipse.fennec.mcp.api.MCPTool;
 import org.eclipse.fennec.mcp.metadata.tools.core.AspectRenderer;
 import org.eclipse.fennec.mcp.metadata.tools.core.MetadataViews;
+import org.eclipse.fennec.mcp.metadata.tools.core.PackageSelector;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
@@ -60,11 +62,21 @@ public class ListAspectsTool extends AbstractMetadataTool {
 				+ "entries carry each and on which kinds of element (package, class, feature, operation). "
 				+ "An aspect is parsed, structured metadata contributed by a provider - e.g. the 'codec' "
 				+ "aspect holds a class's parsed serialization configuration. Use this to learn which aspect "
-				+ "type ids exist here, then read one with describe_aspects.";
+				+ "type ids exist here, then read one with describe_aspects. Omit both arguments to summarize "
+				+ "every registered package version.";
 		this.inputSchema = """
 				{
 					"type": "object",
-					"properties": {}
+					"properties": {
+						"nsURI": {
+							"type": "string",
+							"description": "Optional. Restrict the summary to one package's namespace URI. Refused when that namespace holds more than one registered version - pass 'fingerprint' instead."
+						},
+						"fingerprint": {
+							"type": "string",
+							"description": "Optional. Restrict the summary to one model version exactly, e.g. 'fp1:14466a0b5de879a6'."
+						}
+					}
 				}
 				""";
 	}
@@ -72,7 +84,10 @@ public class ListAspectsTool extends AbstractMetadataTool {
 	@Override
 	public Mono<McpSchema.CallToolResult> execute(McpAsyncServerExchange exchange, Map<String, Object> arguments) {
 		return run(() -> {
-			Map<String, Map<String, Integer>> summary = AspectRenderer.summarize(MetadataViews.packages(metadata), visibility);
+			PackageMetadata scope = PackageSelector.scope(metadata, optionalString(arguments, "nsURI"),
+					optionalString(arguments, "fingerprint"));
+			List<PackageMetadata> packages = scope == null ? MetadataViews.packages(metadata) : List.of(scope);
+			Map<String, Map<String, Integer>> summary = AspectRenderer.summarize(packages, visibility);
 
 			List<Map<String, Object>> aspects = new ArrayList<>(summary.size());
 			for (Map.Entry<String, Map<String, Integer>> entry : summary.entrySet()) {
@@ -84,6 +99,8 @@ public class ListAspectsTool extends AbstractMetadataTool {
 			}
 
 			Map<String, Object> result = new LinkedHashMap<>();
+			result.put("scannedNsURI", scope == null ? null : scope.getNsURI());
+			result.put("scannedFingerprint", scope == null ? null : scope.getModelFingerprint());
 			result.put("count", aspects.size());
 			result.put("aspects", aspects);
 			return result;

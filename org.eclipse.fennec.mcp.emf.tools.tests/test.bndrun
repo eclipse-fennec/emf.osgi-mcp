@@ -1,0 +1,24 @@
+-library: enableOSGi-Test
+
+# The metadata layer IS deployed here: this runtime proves that ModelGuard's optional
+# MetadataService reference binds, and that a fingerprint reaches a model version the
+# EPackage.Registry cannot hold.
+-runrequires: \
+	bnd.identity;id='org.eclipse.fennec.mcp.emf.tools.tests',\
+	bnd.identity;id='org.eclipse.fennec.mcp.emf.tools',\
+	bnd.identity;id='org.eclipse.fennec.emf.osgi.metadata',\
+	bnd.identity;id='org.eclipse.fennec.emf.osgi.component',\
+	bnd.identity;id='org.apache.felix.configadmin',\
+	bnd.identity;id='org.apache.aries.spifly.dynamic.bundle'
+
+-runbundles.test: \
+	org.eclipse.fennec.mcp.emf.tools.tests;version=snapshot
+
+-runfw: org.apache.felix.framework
+-runee: JavaSE-21
+
+# Same swap as the other OSGi test runtimes: SpiFly's framework extension embeds an ASM
+# that stops at class file V22, and its weaving hook then fails on Java 23+.
+-runblacklist: \
+	bnd.identity;id='org.gecko.emf.osgi.component.minimal',\
+	bnd.identity;id='org.apache.aries.spifly.dynamic.framework.extension'
