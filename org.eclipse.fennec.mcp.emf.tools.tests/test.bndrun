@@ -1,8 +1,9 @@
 -library: enableOSGi-Test
 
-# The metadata layer IS deployed here: this runtime proves that ModelGuard's optional
-# MetadataService reference binds, and that a fingerprint reaches a model version the
-# EPackage.Registry cannot hold.
+# The metadata layer IS deployed here, which is what lets ModelGuard activate at all: its
+# MetadataService reference is mandatory. This runtime proves that the reference is
+# satisfiable, and that a fingerprint reaches a model version the EPackage.Registry cannot
+# hold.
 -runrequires: \
 	bnd.identity;id='org.eclipse.fennec.mcp.emf.tools.tests',\
 	bnd.identity;id='org.eclipse.fennec.mcp.emf.tools',\

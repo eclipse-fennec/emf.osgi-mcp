@@ -38,7 +38,6 @@ import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Modified;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ReferenceCardinality;
-import org.osgi.service.component.annotations.ReferencePolicy;
 import org.osgi.service.component.annotations.ReferencePolicyOption;
 import org.osgi.service.metatype.annotations.Designate;
 
@@ -88,13 +87,21 @@ public class ModelGuard {
 	private volatile PackageRegistry sessionPackages;
 
 	/**
-	 * The metadata layer, when deployed. It is what makes a model <em>version</em>
-	 * addressable: an {@link EPackage.Registry} is keyed by namespace URI and holds
-	 * one package per nsURI, so without this there is nothing to tell two registered
-	 * versions of one namespace apart - and no way to notice that there are two.
+	 * The metadata layer. It is what makes a model <em>version</em> addressable: an
+	 * {@link EPackage.Registry} is keyed by namespace URI and holds one package per
+	 * nsURI, so without this there is nothing to tell two registered versions of one
+	 * namespace apart - and no way to notice that there are two.
+	 * <p>
+	 * Mandatory and static, deliberately: {@code MetadataServiceComponent} is an
+	 * immediate component whose only mandatory dependency is the
+	 * {@code FingerprintService} shipped in the same bundle as the
+	 * {@link ResourceSetFactory} above, so every runtime that can activate this guard
+	 * already registers it and it never comes and goes. Optional-dynamic would model a
+	 * deployment that does not exist, and if one ever did it would trade a loud
+	 * activation failure for reads that are quietly blind to a model's version.
 	 */
-	@Reference(cardinality = ReferenceCardinality.OPTIONAL, policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY)
-	private volatile MetadataService metadata;
+	@Reference
+	private MetadataService metadata;
 
 	private volatile Set<String> packageAllowList = Set.of();
 	private volatile Set<String> classAllowList = Set.of();
@@ -261,10 +268,6 @@ public class ModelGuard {
 			requireUnambiguous(nsUri);
 			return requireAllowedPackage(nsUri);
 		}
-		if (metadata == null) {
-			throw new ToolException("This runtime has no metadata layer deployed, so a model fingerprint cannot "
-					+ "be resolved. Address the package by 'nsURI' instead.");
-		}
 		PackageMetadata version = metadata.getPackageMetadataByFingerprint(fingerprint)
 				.orElseThrow(() -> new ToolException(String.format(
 						"No model version with fingerprint '%s' is registered in this runtime.", fingerprint)));
@@ -289,17 +292,18 @@ public class ModelGuard {
 
 	/**
 	 * Refuses an nsURI that the metadata layer knows several registered versions of.
-	 * A no-op without the metadata layer, which is the deployment that cannot tell
-	 * versions apart in the first place.
 	 *
 	 * @param nsUri the namespace URI
 	 * @throws ToolException if more than one version is registered under it
 	 */
 	private void requireUnambiguous(String nsUri) {
-		if (metadata == null || nsUri == null) {
+		// The reference is mandatory, so the field is null only for a unit test that
+		// constructs the guard through a test constructor - not for any deployment.
+		MetadataService service = this.metadata;
+		if (service == null || nsUri == null) {
 			return;
 		}
-		List<PackageMetadata> versions = metadata.getPackageMetadataVersions(nsUri);
+		List<PackageMetadata> versions = service.getPackageMetadataVersions(nsUri);
 		if (versions.size() <= 1) {
 			return;
 		}
@@ -319,9 +323,10 @@ public class ModelGuard {
 	 * package that was never registered there - a memoized read, not a registration.
 	 *
 	 * @param ePackage the package
-	 * @return the fingerprint, or {@code null} without a metadata layer
+	 * @return the fingerprint, or {@code null} if none can be resolved for it
 	 */
 	public String fingerprintOf(EPackage ePackage) {
+		// See requireUnambiguous: null here means a direct test construction.
 		MetadataService service = this.metadata;
 		if (service == null || ePackage == null) {
 			return null;
