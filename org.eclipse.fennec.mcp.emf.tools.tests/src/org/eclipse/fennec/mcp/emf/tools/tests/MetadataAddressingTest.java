@@ -47,9 +47,9 @@ import org.osgi.test.junit5.service.ServiceExtension;
  * resolution has no way to return at all.
  * <p>
  * The unit tests cover the same rules with the field set by reflection. What this adds is
- * that {@code ModelGuard}'s <em>optional</em> {@code MetadataService} reference actually
- * binds when the layer is deployed - if it did not, every assertion below would come back
- * as "no metadata layer deployed" instead.
+ * that {@code ModelGuard}'s {@code MetadataService} reference is actually satisfiable in a
+ * deployed runtime - the reference is mandatory, so if it were not, the guard would never
+ * activate and {@code awaitTool} would time out before a single rule was reached.
  */
 @ExtendWith(BundleContextExtension.class)
 @ExtendWith(ServiceExtension.class)

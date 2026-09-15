@@ -169,22 +169,6 @@ class ModelVersionAddressingTest {
 				.contains("No model version with fingerprint");
 	}
 
-	// ---- without the metadata layer, nothing changes ----
-
-	@Test
-	void anNsUriStillAnswersWithNoMetadataLayerDeployed() {
-		Map<String, Object> result = call(listMetamodel(guardWithoutMetadata()), Map.of("nsURI", TestModels.NS_URI));
-
-		assertThat(result).containsEntry("nsURI", TestModels.NS_URI);
-		assertThat(result.get("modelFingerprint")).isNull();
-	}
-
-	@Test
-	void aFingerprintSaysWhyItCannotBeResolvedWithNoMetadataLayer() {
-		assertThat(errorFrom(listMetamodel(guardWithoutMetadata()), Map.of("fingerprint", registeredFingerprint)))
-				.contains("no metadata layer deployed");
-	}
-
 	// ---- export refuses to hand out the wrong version ----
 
 	@Test
@@ -257,17 +241,18 @@ class ModelVersionAddressingTest {
 		return constructor.newInstance(factory, DatasetLimits.defaults(), workDir);
 	}
 
+	/**
+	 * The guard as DS builds it: the {@code MetadataService} reference is mandatory, so
+	 * there is no unwired variant to test against - the field is set by reflection only
+	 * because the test constructor lives in another package.
+	 */
 	private ModelGuard guardWithMetadata() {
-		ModelGuard guard = guardWithoutMetadata();
-		set(guard, "metadata", whiteboard);
-		return guard;
-	}
-
-	private ModelGuard guardWithoutMetadata() {
 		try {
 			var constructor = ModelGuard.class.getDeclaredConstructor(EPackage.Registry.class, Set.class, Set.class);
 			constructor.setAccessible(true);
-			return constructor.newInstance(packageRegistry, Set.of("*"), Set.of("*"));
+			ModelGuard guard = constructor.newInstance(packageRegistry, Set.of("*"), Set.of("*"));
+			set(guard, "metadata", whiteboard);
+			return guard;
 		} catch (ReflectiveOperationException e) {
 			throw new IllegalStateException(e);
 		}

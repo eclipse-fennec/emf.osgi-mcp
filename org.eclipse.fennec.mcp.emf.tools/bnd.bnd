@@ -16,23 +16,14 @@ Bundle-Description: MCP tools to create, populate, validate and serialize EMF mo
 	org.osgi.dto;version=latest,\
 	org.eclipse.fennec.mcp.api;version=snapshot
 
-# The codec metadata bridge is optional: without the Fennec codec in the
-# runtime the tools work, only create_from_json/JSON export need it.
-#
-# Both metadata packages are listed because ModelGuard uses PackageMetadata, which lives in
-# the second one - left to bnd's '*' it would become a mandatory import and quietly
-# contradict the line above.
-#
-# Note what this does NOT buy: a runtime without the metadata layer. This bundle needs
-# mcp.api, which imports org.eclipse.fennec.codec.metadata.model.codec mandatorily, and
-# codec.metadata imports both metadata packages mandatorily - so the metadata bundle is in
-# every runtime that can host these tools (proven by the resolve in emf.tools.tests). These
-# stay optional as hygiene and to keep the manifest honest about what the code requires,
-# not because the degraded path is a supported deployment.
-Import-Package: \
-	org.eclipse.fennec.emf.osgi.metadata;resolution:=optional,\
-	org.eclipse.fennec.emf.osgi.model.metadata;resolution:=optional,\
-	*
+# No Import-Package overrides: the metadata packages are mandatory imports, matching
+# ModelGuard's mandatory MetadataService reference. They were optional once, to mirror the
+# codec metadata bridge, but that only ever described a runtime this bundle cannot be
+# deployed in: mcp.api imports org.eclipse.fennec.codec.metadata.model.codec mandatorily
+# and codec.metadata imports both metadata packages mandatorily, so the metadata bundle is
+# in every runtime that can host these tools (proven by the resolve in emf.tools.tests).
+# An optional import beside a mandatory reference is the worst of the two: the bundle
+# resolves and the guard then never activates, taking every EMF tool with it.
 
 # component.minimal is test-only: it exports org.eclipse.fennec.emf.osgi.fingerprint.util,
 # whose FingerprintHelper backs MetadataServices.createWhiteboard(). Needed to build a real

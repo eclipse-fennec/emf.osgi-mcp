@@ -126,10 +126,11 @@ Two rules follow, and both are refusals rather than best guesses:
 Every result now carries the `modelFingerprint` of what was actually read, so a
 report can state which version it describes.
 
-Where no metadata layer is deployed the behaviour is unchanged: nsURI addressing
-works exactly as before, `modelFingerprint` is absent, and a `fingerprint`
-argument is refused with that explanation. Find fingerprints with
-`describe_package_metadata` or `describe_metadata_status` in the metadata tools.
+The metadata layer is not optional for these tools: `EMFModelGuard` takes a
+mandatory `MetadataService` reference, so a runtime without one activates no EMF
+model tool at all rather than serving a version-blind subset of them. Find
+fingerprints with `describe_package_metadata` or `describe_metadata_status` in
+the metadata tools.
 
 ## Composite authoring: the whole package in one call
 
