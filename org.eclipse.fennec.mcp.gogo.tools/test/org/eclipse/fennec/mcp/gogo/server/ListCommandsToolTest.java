@@ -35,6 +35,10 @@ import io.modelcontextprotocol.spec.McpSchema;
 /**
  * Verifies scope filtering, the type-safe scope guard and the output cap of
  * {@link ListCommandsTool}.
+ * <p>
+ * Felix Gogo Command's {@code help} returns its text instead of printing it, so
+ * the default mock does the same; {@link #printedHelp_isStillRead()} keeps the
+ * printing variant covered.
  */
 class ListCommandsToolTest {
 
@@ -43,6 +47,7 @@ class ListCommandsToolTest {
 	private CommandProcessor processor = mock(CommandProcessor.class);
 	private CommandSession session = mock(CommandSession.class);
 	private ListCommandsTool tool;
+	private PrintStream[] captured = new PrintStream[1];
 
 	@BeforeEach
 	void setUp() throws Exception {
@@ -52,16 +57,36 @@ class ListCommandsToolTest {
 		field.set(tool, processor);
 		tool.activate();
 
-		PrintStream[] captured = new PrintStream[1];
 		when(processor.createSession(any(), any(), any())).thenAnswer(inv -> {
 			captured[0] = inv.getArgument(1);
 			return session;
 		});
+		// Gogo Command 1.1.x: Basic.help() returns the list, stdout stays empty
+		when(session.execute(anyString())).thenReturn(HELP);
+	}
+
+	/** A Gogo that prints the help text to the session's stdout is read as well. */
+	@Test
+	void printedHelp_isStillRead() throws Exception {
 		when(session.execute(anyString())).thenAnswer(inv -> {
 			captured[0].print(HELP);
 			captured[0].flush();
 			return null;
 		});
+		String text = textOf(tool.execute(null, Map.of()).block());
+		assertThat(text).contains("scr:list").contains("gogo:cat").contains("felix:install");
+	}
+
+	/** When both are present, what the command printed wins over the returned object. */
+	@Test
+	void printedHelp_takesPrecedenceOverResult() throws Exception {
+		when(session.execute(anyString())).thenAnswer(inv -> {
+			captured[0].print(HELP);
+			captured[0].flush();
+			return "ignored:result";
+		});
+		String text = textOf(tool.execute(null, Map.of()).block());
+		assertThat(text).contains("scr:list").doesNotContain("ignored:result");
 	}
 
 	private static String textOf(McpSchema.CallToolResult result) {
