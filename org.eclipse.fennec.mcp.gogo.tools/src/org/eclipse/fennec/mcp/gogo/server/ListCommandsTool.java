@@ -77,6 +77,10 @@ public class ListCommandsTool extends AbstractMCPTool {
 	 * by scope. If a scope is given, only lines containing the scope string
 	 * (case-insensitive) are returned; if no matches, the full list is included as fallback.
 	 * The command runs interruptibly, so a request timeout tears it down (see {@link GogoCommandRunner}).
+	 * <p>
+	 * Felix Gogo Command's {@code help} <em>returns</em> the formatted command list rather
+	 * than printing it, so the session's stdout stays empty. Like {@link ExecuteGogoTool},
+	 * the result object is used when nothing was printed.
 	 */
 	@Override
 	public Mono<McpSchema.CallToolResult> execute(McpAsyncServerExchange exchange, Map<String, Object> arguments) {
@@ -86,6 +90,9 @@ public class ListCommandsTool extends AbstractMCPTool {
 		return GogoCommandRunner.run(commandProcessor, executor, "help", MAX_OUTPUT_BYTES)
 				.map(o -> {
 					String output = o.stdout();
+					if (output.isEmpty() && o.result() != null) {
+						output = o.result().toString();
+					}
 
 					if (scope != null && !scope.isBlank()) {
 						// Filter lines containing the scope
