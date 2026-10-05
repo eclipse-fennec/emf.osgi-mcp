@@ -25,8 +25,11 @@ jobs:
     with:
       # bnd resolve/export tasks are not parallel-safe in this workspace.
       gradle-parallel: false
-      # Prove the docker bndrun still exports before a release build depends on it:
-      # an export fails when a -runbundle cannot be found, which is what a renamed or
-      # dropped bundle looks like. Nothing is pushed from here.
+      # verifyRunbundles re-resolves both inference bndruns and fails when their committed
+      # -runbundles no longer match, which is the only thing that catches a model.atlas
+      # snapshot growing a bundle (issue #50). export then proves the docker bndrun still
+      # exports: an export fails when a -runbundle cannot be FOUND, which is a renamed or
+      # dropped bundle rather than a new requirement. Nothing is pushed from here.
       extra-gradle-tasks: >-
+        org.eclipse.fennec.mcp.inference.runtime:verifyRunbundles
         org.eclipse.fennec.mcp.inference.runtime:export.inference.runtime_docker

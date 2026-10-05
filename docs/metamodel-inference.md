@@ -214,9 +214,26 @@ back to, one atlas, so one value configures both directions; the default points
 at where model.atlas's `docker-compose-jena.yml` puts a local container, which
 keeps a local run working with nothing set.
 
-The `eager.scopes` below it stay literal. The overlay exists to name the `jena`
-scope on the read side, and which scope is *published* into is a separate
-decision (`MODEL_ATLAS_PUBLISHING_SCOPE`).
+Its three scope keys — `eager.scopes`, `scope.allow.list` and `default.scope` —
+follow the same rule one step further:
+
+```
+$[env:MODEL_ATLAS_SCOPE;default=$[prop:MODEL_ATLAS_SCOPE;default=$[env:MODEL_ATLAS_PUBLISHING_SCOPE;default=$[prop:MODEL_ATLAS_PUBLISHING_SCOPE;default=jena]]]]
+```
+
+**`MODEL_ATLAS_SCOPE`** names the scope read from, and when it is unset the
+*publishing* scope is used, because a deployment that renamed its tenant renamed
+it in both directions. `jena` stays the last-resort default — the scope
+model.atlas's own `docker-compose-jena.yml` creates — so a local run still works
+with nothing set. Set `MODEL_ATLAS_SCOPE` only when the read and write scopes
+genuinely differ.
+
+Two things about that chain are worth knowing. The fallback triggers on an
+**unset** variable, never on an empty one: `MODEL_ATLAS_SCOPE=` is a value, and
+the client then asks the atlas for the empty scope and fails every
+`listPackages`. And `~jena` in the PID is only a factory instance name; renaming
+it would strand existing configurations without changing which scope is read, so
+it stays put.
 
 ### How interpolation actually works
 
@@ -251,6 +268,12 @@ Four rules are worth knowing before editing these placeholders:
 4. **`prop:` reads framework properties**, falling back to JVM system
    properties, so `-runvm -D…` works. An exported environment variable always
    wins over a system property.
+5. **Placeholders nest to any depth, and only `null` falls through.** A
+   `default` directive is itself interpolated before the lookup runs, which is
+   what makes the four-level scope chain above work. But the provider falls back
+   to `default` only when the variable is *absent* — an exported-but-empty
+   variable resolves to the empty string and the rest of the chain is never
+   consulted.
 
 ## The three allow-lists
 
@@ -350,6 +373,36 @@ Use `resolve.launch`, **not** `resolve`: the bnd Gradle plugin globs every
 which fails because it is an include-fragment with no `-runfw` or
 `-runrequires`. CI never hits this, `secrets.bndrun` being gitignored.
 
+### Keeping the two resolutions honest
+
+`-runbundles` in a bndrun is a resolution frozen at the moment someone last
+pressed Resolve, and `export` only checks that every bundle *named* there can be
+found. That is why a model.atlas snapshot splitting
+`org.eclipse.fennec.model.atlas.publisher` and
+`…model.atlas.action.api` out of the set it already had went unnoticed until the
+published container failed to resolve at startup ([#50][issue-50]). The check
+for it is a task of its own:
+
+```bash
+./gradlew :org.eclipse.fennec.mcp.inference.runtime:verifyRunbundles
+```
+
+It re-resolves both `launch.bndrun` and `inference.runtime_docker.bndrun` into
+the build directory, compares each result with the committed `-runbundles` as a
+*set*, and fails naming the bundles that differ. Nothing is written back, so it
+is safe to run on a build server and against a dirty tree alike; the fix for a
+red run is `resolve.launch` / `resolve.inference.runtime_docker` and a commit.
+`build.yml`, `snapshot.yml` and `release.yml` all run it before `export`, so a
+stale resolution now stops a publish instead of shipping as an image that cannot
+start.
+
+The set comparison is deliberate: bnd preserves the existing order and appends
+what is new, while a fresh resolve comes out sorted, so the two routinely hold
+identical content in different orders — which is also why bnd's own
+`failOnChanges` (an order-sensitive `List.equals`) cannot serve as the gate.
+
+[issue-50]: https://github.com/eclipse-fennec/emf.osgi-mcp/issues/50
+
 `model.atlas.mcp.tools` and `model.atlas.mcp.config` ship from the **model.atlas**
 project and resolve from its published snapshot, declared in `cnf/central.mvn`
 alongside every other external dependency — nothing has to be built by hand or
@@ -410,6 +463,8 @@ curl -sS -X POST http://localhost:8099/mcp/inference \
 | `osgi.implementation=mcp.inference cannot be resolved` naming a bundle you never requested | that identity requirement is compiled into `MCPServerActivator`'s manifest; fix the annotation, rebuild, re-resolve |
 | `/mcp/inference` never comes up, no obvious error | one of the 20 tools is missing — most often `post_to_model_atlas`, because the publisher refused to activate on a blank `base.uri` or `scope` |
 | `resolve` fails on `secrets.bndrun` | use `resolve.launch` |
+| A container logs `missing requirement osgi.wiring.package` for a model.atlas package | the committed `-runbundles` predate a model.atlas change; `verifyRunbundles` catches this, `export` does not |
+| `listPackages(<scope>) — unexpected status 400: Scope [<scope>] not found` | the read scope does not exist in that atlas — set `MODEL_ATLAS_SCOPE`, or align `MODEL_ATLAS_PUBLISHING_SCOPE` with the tenant |
 | `401` from a container, token set on the command line | the token reached compose but not the process, or it does not match; a container never gets the loopback exemption |
 | Connection refused against a running container | `MCP_INFERENCE_HTTP_HOST` is not `0.0.0.0`, so the servlet bound loopback inside the container |
 | Publishing refused: "namespace is not publishable" | `publish.nsuri.allowlist` — check the pipe separator survived bnd's comma splitting (`jcmd <pid> VM.system_properties \| grep MCP_ATLAS`) |

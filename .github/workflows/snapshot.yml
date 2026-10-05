@@ -32,8 +32,10 @@ jobs:
       gradle-parallel: false
       # Export the docker runtime jar in the SAME build that publishes to Maven, and hand it
       # to the container job as the release-jars artifact - so the image embeds exactly the
-      # jar that was released.
+      # jar that was released. verifyRunbundles runs first so a stale resolution stops the
+      # publish rather than shipping as an image that cannot start (issue #50).
       extra-gradle-tasks: >-
+        org.eclipse.fennec.mcp.inference.runtime:verifyRunbundles
         org.eclipse.fennec.mcp.inference.runtime:export.inference.runtime_docker
       artifact-paths: |
         org.eclipse.fennec.mcp.inference.runtime/generated/distributions/executable/inference.runtime_docker.jar

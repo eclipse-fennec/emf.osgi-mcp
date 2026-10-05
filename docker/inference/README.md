@@ -92,6 +92,7 @@ project's `model.atlas.mcp.config` (the publisher).
 | `MCP_INFERENCE_HTTP_HOST` | `127.0.0.1`, **`0.0.0.0` in the image** | whiteboard bind address; set in the Dockerfile, not something a deployment normally touches |
 | `MODEL_ATLAS_BASE_URI` | `http://localhost:8080/atlas/rest` | Atlas REST base, read **and** publish. No usable default in a container |
 | `MODEL_ATLAS_PUBLISHING_SCOPE` | empty | Atlas scope published into (`jena` in the standard deployment). Blank ⇒ the endpoint does not come up |
+| `MODEL_ATLAS_SCOPE` | `MODEL_ATLAS_PUBLISHING_SCOPE`, else `jena` | Atlas scope the discovery tools **read** from. Only needed when a deployment reads from a different scope than it publishes into |
 | `MODEL_ATLAS_PUBLISHING_STAGE` | `draft` | publication stage; should stay a draft stage |
 | `MODEL_ATLAS_OVERWRITE` | `false` | whether an existing draft is replaced |
 | `MCP_ATLAS_PUBLISH_ALLOWLIST` | empty | `\|`-separated namespace rules, each exact or a `prefix*`. Deny-all: blank publishes nothing |
@@ -100,6 +101,12 @@ project's `model.atlas.mcp.config` (the publisher).
 comma-separated value is split by bnd on the `-runvm` path a local run shares with this. It is
 declared `type=String[];delimiter=|` in `publisher.json` — the `type` directive is what makes
 the plugin convert at all, so `delimiter` alone would arrive as one joined String.
+
+`MODEL_ATLAS_SCOPE` normally stays unset. A deployment reads the EPackages of, and publishes
+back to, one atlas scope, so the read side falls back to `MODEL_ATLAS_PUBLISHING_SCOPE` and one
+variable configures both — set `MODEL_ATLAS_SCOPE` only when the two genuinely differ. Note
+that the fallback is on an *unset* variable, not an empty one: `MODEL_ATLAS_SCOPE=` reaches the
+client as an empty scope, and every `listPackages` then fails with `Scope [] not found`.
 
 ### What is baked in, and what that costs
 

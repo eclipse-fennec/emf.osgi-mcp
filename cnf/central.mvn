@@ -197,10 +197,12 @@ org.eclipse.fennec.util:org.eclipse.fennec.openapi.client:1.0.0-SNAPSHOT
 org.eclipse.fennec.util:org.eclipse.fennec.openapi.ecore:1.0.0-SNAPSHOT
 
 #Model Atlas Deps for Inference
+org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.action.api:0.1.0-SNAPSHOT
 org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.scope.api:0.1.0-SNAPSHOT
 org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.rest.client.api:0.1.0-SNAPSHOT
 org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.rest.client.impl:0.1.0-SNAPSHOT
 org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.rest.client.osgi:0.1.0-SNAPSHOT
+org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.publisher:0.1.0-SNAPSHOT
 org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.mcp.tools:0.1.0-SNAPSHOT
 org.eclipse.fennec.model.atlas:org.eclipse.fennec.model.atlas.mcp.config:0.1.0-SNAPSHOT
 

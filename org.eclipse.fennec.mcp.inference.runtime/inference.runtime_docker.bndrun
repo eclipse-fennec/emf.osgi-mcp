@@ -6,7 +6,7 @@
 #
 # Kept in sync with launch.bndrun: identical -runrequires, therefore the identical resolved
 # -runbundles below - a change to one belongs in both, and the two lists are meant to stay
-# diffable. Five deliberate differences, all about running unattended in a container rather
+# diffable. Six deliberate differences, all about running unattended in a container rather
 # than at a developer's terminal:
 #
 #  1. No `-include: -secrets.bndrun`. Tokens and Model Atlas coordinates arrive as
@@ -28,12 +28,30 @@
 #     that silently never comes up in the image. It can in principle pull a bundle a launch
 #     resolve would not - the -runbundles below are identical to launch.bndrun's today, and a
 #     diff between the two files is the check that this is still true.
+#  6. The -augment and the second -runblacklist entry below, both of which exist only because
+#     of 5: one gives the MCP SDK's JSON bundle the osgi.service capabilities its own DS
+#     descriptors publish, the other keeps the resolver from answering MCPToolProvider's
+#     MCPTool requirement with the Gogo shell tools. Each is explained where it stands.
 #
 # See docker/inference/README.md for the ports, the environment table, and why a token stops
 # being optional the moment the endpoint is reachable from outside the container.
 -runprovidedcapabilities: ${native_capability}
 
 -resolve.effective: active
+
+# ...which only works because of this. The MCP SDK's JSON bundle registers both suppliers as
+# DS components (Service-Component in its manifest, two descriptors in OSGI-INF), but it is
+# built with the bnd DS requirements and capabilities switched off, so its manifest advertises
+# neither `osgi.extender=osgi.component` nor the `osgi.service` capabilities the components
+# actually publish. The services exist at runtime - the OSGi integration tests assert exactly
+# that - and SCR is in the -runbundles for everyone else, so nothing is missing from the image.
+# Only the resolver cannot see them, and under `-resolve.effective: active` that sinks the
+# whole resolve on `objectClass=McpJsonMapperSupplier`. -augment states what the descriptors
+# already say, which is narrower than turning service resolution off: every OTHER missing
+# service provider still fails the export, which is the point of rule 5.
+-augment.mcp.json.jackson3: \
+	io.modelcontextprotocol.sdk.mcp-json-jackson3; \
+		capability:='osgi.service;objectClass:List<String>="io.modelcontextprotocol.json.McpJsonMapperSupplier";effective:=active,osgi.service;objectClass:List<String>="io.modelcontextprotocol.json.schema.JsonSchemaValidatorSupplier";effective:=active'
 
 # felix.cm.config.plugins wires the interpolation plugin that resolves the $[env:...]
 # placeholders in inference.json (auth.token), runtime.json (the bind host), the atlas
@@ -71,7 +89,19 @@
 # it - a runtime that starts with no HTTP endpoint at all. The dynamic.bundle variant
 # imports org.objectweb.asm instead, so the ASM deployed next to it decides what class
 # files the weaver can read.
--runblacklist: bnd.identity;id='org.apache.aries.spifly.dynamic.framework.extension'
+#
+# org.eclipse.fennec.mcp.gogo.tools is blacklisted for a different reason. Under
+# `-resolve.effective: active` MCPToolProvider's AT_LEAST_ONE `tools` reference becomes a
+# real `osgi.service: objectClass=MCPTool` requirement, and the resolver is free to satisfy
+# it with ANY MCPTool provider - it picks gogo.tools, although emf.tools and metadata.tools
+# are already in the set for other reasons and satisfy it just as well. That would put a tool
+# that runs arbitrary Gogo shell commands into an image whose endpoint is reachable from
+# outside the container and whose MCPToolProvider~inference filter does not select it: not
+# exploitable through /mcp/inference, but a shell in the image for no reason, and a divergence
+# from launch.bndrun's -runbundles that the diff between the two files is supposed to catch.
+-runblacklist: \
+	bnd.identity;id='org.apache.aries.spifly.dynamic.framework.extension',\
+	bnd.identity;id='org.eclipse.fennec.mcp.gogo.tools'
 
 -runbundles: \
 	com.ethlo.time.itu;version='[1.14.0,1.14.1)',\
@@ -157,4 +187,6 @@
 	org.objectweb.asm.commons;version='[9.10.1,9.10.2)',\
 	org.objectweb.asm.tree;version='[9.10.1,9.10.2)',\
 	org.objectweb.asm.tree.analysis;version='[9.10.1,9.10.2)',\
-	org.objectweb.asm.util;version='[9.10.1,9.10.2)'
+	org.objectweb.asm.util;version='[9.10.1,9.10.2)',\
+	org.eclipse.fennec.model.atlas.action.api;version='[0.1.0,0.1.1)',\
+	org.eclipse.fennec.model.atlas.publisher;version='[0.1.0,0.1.1)'
