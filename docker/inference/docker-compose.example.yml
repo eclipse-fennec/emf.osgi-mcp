@@ -35,9 +35,15 @@ services:
       MCP_INFERENCE_AUTH_TOKEN: ${MCP_INFERENCE_AUTH_TOKEN:?set it in docker/inference/.env}
 
       # One value for both directions: the atlas whose EPackages the discovery tools read,
-      # and the atlas post_to_model_atlas publishes back to.
+      # and the atlas post_to_model_atlas publishes back to. The same holds for the scope -
+      # the read side falls back to MODEL_ATLAS_PUBLISHING_SCOPE, so a deployment that renamed
+      # its tenant renames it once. Set MODEL_ATLAS_SCOPE below only if the two differ.
       MODEL_ATLAS_BASE_URI: ${MODEL_ATLAS_BASE_URI:?set it in docker/inference/.env}
       MODEL_ATLAS_PUBLISHING_SCOPE: ${MODEL_ATLAS_PUBLISHING_SCOPE:?set it in docker/inference/.env}
+
+      # Scope the discovery tools READ from. Leave it out to follow the publishing scope; the
+      # `-` form matters, since an EMPTY value is a value and would be read as an empty scope.
+      MODEL_ATLAS_SCOPE: ${MODEL_ATLAS_SCOPE:-${MODEL_ATLAS_PUBLISHING_SCOPE}}
 
       # Optional, with defaults that stay conservative: publish as a draft, never replace an
       # existing one. Widen deliberately.

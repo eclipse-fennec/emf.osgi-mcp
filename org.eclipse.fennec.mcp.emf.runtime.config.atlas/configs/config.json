@@ -4,16 +4,16 @@
 	"org.eclipse.fennec.model.atlas.rest.client~jena": {
 		"base.uri": "$[env:MODEL_ATLAS_BASE_URI;default=$[prop:MODEL_ATLAS_BASE_URI;default=http://localhost:8080/atlas/rest]]",
 
-		"_comment": "Read side. Deliberately the SAME variable ModelAtlasPublisher~publisher reads for its own base.uri: a deployment reads the EPackages of, and publishes back to, one atlas, so one value configures both. The default is where model.atlas's docker-compose-jena.yml puts a local container, which keeps a local run working with nothing set. Note the scopes below stay literal - the overlay exists to name the jena scope, and the publishing scope is a separate decision (MODEL_ATLAS_PUBLISHING_SCOPE).",
+		"_comment": "Read side. base.uri is deliberately the SAME variable ModelAtlasPublisher~publisher reads for its own base.uri: a deployment reads the EPackages of, and publishes back to, one atlas, so one value configures both. The default is where model.atlas's docker-compose-jena.yml puts a local container, which keeps a local run working with nothing set. The scopes below follow the same rule one step further: MODEL_ATLAS_SCOPE names the scope read from, and when it is unset the publishing scope is used, because a deployment that renamed its tenant renamed it in both directions. 'jena' remains the last-resort default, which is the scope model.atlas's own compose file creates. The ~jena instance name is only a factory PID suffix and stays put: renaming it would strand existing configurations without changing which scope is read.",
 
 		"mode": "EAGER",
 		"eager.scopes": [
-			"jena"
+			"$[env:MODEL_ATLAS_SCOPE;default=$[prop:MODEL_ATLAS_SCOPE;default=$[env:MODEL_ATLAS_PUBLISHING_SCOPE;default=$[prop:MODEL_ATLAS_PUBLISHING_SCOPE;default=jena]]]]"
 		],
 		"scope.allow.list": [
-			"jena"
+			"$[env:MODEL_ATLAS_SCOPE;default=$[prop:MODEL_ATLAS_SCOPE;default=$[env:MODEL_ATLAS_PUBLISHING_SCOPE;default=$[prop:MODEL_ATLAS_PUBLISHING_SCOPE;default=jena]]]]"
 		],
-		"default.scope": "jena",
+		"default.scope": "$[env:MODEL_ATLAS_SCOPE;default=$[prop:MODEL_ATLAS_SCOPE;default=$[env:MODEL_ATLAS_PUBLISHING_SCOPE;default=$[prop:MODEL_ATLAS_PUBLISHING_SCOPE;default=jena]]]]",
 
 		"mode.strict": false,
 		"force.remote": false,

@@ -1,0 +1,100 @@
+import aQute.bnd.gradle.Resolve
+
+/*
+ * `verifyRunbundles` - the check that issue #50 was missing.
+ *
+ * `-runbundles` in a bndrun is a resolution frozen at the moment someone last pressed
+ * Resolve. `export` only verifies that every bundle NAMED there can be found, so when the
+ * model.atlas snapshots split a package out into org.eclipse.fennec.model.atlas.publisher and
+ * org.eclipse.fennec.model.atlas.action.api, both bndruns kept naming the old set, the export
+ * stayed green, the image was published, and the first thing that noticed was the container
+ * failing to resolve on startup.
+ *
+ * So: re-resolve each bndrun into the build directory - bnd writes a small file that
+ * `-include`s the original and carries only the freshly calculated `-runbundles` - and
+ * compare that set with the one committed in the bndrun. A difference fails the build and
+ * names the bundles, which is the signal to re-resolve and commit. Nothing is written back,
+ * so this is safe to run on a build server and in a dirty working tree alike.
+ *
+ * The committed `-runbundles` are compared as a SET. bnd preserves the existing order and
+ * appends what is new, while a fresh resolve comes out sorted, so the two are routinely in
+ * different orders with identical content - which is also why bnd's own `failOnChanges`
+ * (an order-sensitive List.equals) is not usable as the gate here.
+ *
+ * `resolve.<name>` is left exactly as it was: it still writes the resolution back into the
+ * bndrun, which is how you fix a red `verifyRunbundles`.
+ */
+def bndruns = ["inference.runtime_docker", "launch"]
+
+/** Split a bnd clause list on commas that are not inside a quoted attribute value. */
+static List<String> splitClauses(String value) {
+	List<String> clauses = []
+	StringBuilder current = new StringBuilder()
+	boolean quoted = false
+	value.each { String ch ->
+		if (ch == "'" || ch == '"') {
+			quoted = !quoted
+			current.append(ch)
+		} else if (ch == "," && !quoted) {
+			clauses.add(current.toString().trim())
+			current.setLength(0)
+		} else {
+			current.append(ch)
+		}
+	}
+	clauses.add(current.toString().trim())
+	return clauses.findAll { !it.isEmpty() }
+}
+
+/** The `-runbundles` of a bndrun as a set of clauses, continuation lines joined. */
+static Set<String> runbundlesOf(File bndrun) {
+	String joined = bndrun.getText("UTF-8").replaceAll(/\\\s*\r?\n\s*/, " ")
+	String header = joined.readLines().find { it.trim().startsWith("-runbundles:") }
+	if (header == null) {
+		return [] as Set
+	}
+	return splitClauses(header.substring(header.indexOf(":") + 1)) as Set
+}
+
+def verifyTasks = bndruns.collect { String name ->
+	def resolveTask = tasks.register("resolveForVerify.${name}", Resolve) {
+		group = "verification"
+		description = "Resolve ${name}.bndrun into the build directory, without touching the committed one."
+		// -dependson in bnd.bnd makes this project's jar depend on every workspace bundle the
+		// bndruns name only by identity, so assemble is enough to have them all freshly built.
+		dependsOn tasks.named("assemble")
+		bndrun = file("${name}.bndrun")
+		outputBndrun = layout.buildDirectory.file("verifyRunbundles/${name}.bndrun")
+	}
+
+	return tasks.register("verifyRunbundles.${name}") {
+		group = "verification"
+		description = "Fail if the committed -runbundles of ${name}.bndrun no longer match a fresh resolve."
+		dependsOn resolveTask
+		def committedFile = file("${name}.bndrun")
+		def resolvedFile = resolveTask.flatMap { it.outputBndrun }
+		inputs.file(committedFile)
+		inputs.file(resolvedFile)
+		outputs.upToDateWhen { false }
+		doLast {
+			Set<String> committed = runbundlesOf(committedFile)
+			Set<String> resolved = runbundlesOf(resolvedFile.get().asFile)
+			Set<String> stale = committed - resolved
+			Set<String> missing = resolved - committed
+			if (!stale.isEmpty() || !missing.isEmpty()) {
+				StringBuilder message = new StringBuilder()
+				message.append("${name}.bndrun: the committed -runbundles no longer match a fresh resolve.\n")
+				missing.toSorted().each { message.append("  missing (a fresh resolve needs it): ${it}\n") }
+				stale.toSorted().each { message.append("  stale (a fresh resolve does not): ${it}\n") }
+				message.append("Run `./gradlew :${project.name}:resolve.${name}` and commit the result.")
+				throw new GradleException(message.toString())
+			}
+		}
+	}
+}
+
+tasks.register("verifyRunbundles") {
+	group = "verification"
+	description = "Check every inference bndrun's committed -runbundles against a fresh resolve."
+	dependsOn verifyTasks
+}

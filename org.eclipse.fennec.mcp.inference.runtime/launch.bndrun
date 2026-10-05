@@ -129,4 +129,6 @@
 	org.objectweb.asm.commons;version='[9.10.1,9.10.2)',\
 	org.objectweb.asm.tree;version='[9.10.1,9.10.2)',\
 	org.objectweb.asm.tree.analysis;version='[9.10.1,9.10.2)',\
-	org.objectweb.asm.util;version='[9.10.1,9.10.2)'
+	org.objectweb.asm.util;version='[9.10.1,9.10.2)',\
+	org.eclipse.fennec.model.atlas.action.api;version='[0.1.0,0.1.1)',\
+	org.eclipse.fennec.model.atlas.publisher;version='[0.1.0,0.1.1)'
