@@ -37,6 +37,12 @@
 # being optional the moment the endpoint is reachable from outside the container.
 -runprovidedcapabilities: ${native_capability}
 
+# SBOM for `./gradlew sbom` of what the published image runs: the exporter is included only
+# once it has been fetched (see cnf/sbom/plugin.bnd); resolve, the build and the export
+# ignore both lines. Not in launch.bndrun - that one is the developer run, not shipped.
+-include: ${if;${isfile;${workspace}/cnf/cache/sbom-exporter/org.gecko.bnd.sbom.jar};${workspace}/cnf/sbom/plugin.bnd}
+-sbom: level=medium, format=cyclonedx
+
 -resolve.effective: active
 
 # ...which only works because of this. The MCP SDK's JSON bundle registers both suppliers as
