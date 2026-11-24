@@ -59,3 +59,11 @@ javac.target: 21
 	"No translation";is:=ignore,\
 	"The .classpath contains";is:=ignore,\
 	"No metadata for revision";is:=ignore
+
+# org.osgi.service.servlet (the Servlet Whiteboard 2.0 API bundle) exports exactly the packages
+# org.apache.felix.http.jetty12 exports itself, so the resolver may pick either - and it does
+# not pick the same one every time: the committed -runbundles flipped between resolves and
+# verifyRunbundles failed for it in both directions (stale, then missing). With both in a
+# framework the API packages have two exporters. Blacklisted for every bndrun (merged with
+# each bndrun's own -runblacklist) so the jetty12 bundle is always the one that provides them.
+-runblacklist.servlet: bnd.identity;id='org.osgi.service.servlet'
